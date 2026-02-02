@@ -51,7 +51,7 @@ const BatchList = () => {
                             <CardHeader>
                                 <div className="flex justify-between items-start">
                                     <CardTitle>{batch.title}</CardTitle>
-                                    <Badge variant={batch.status === 'OPEN' ? 'default' : 'secondary'}>{batch.status}</Badge>
+                                    <Badge variant={batch.status_effective === 'OPEN' ? 'default' : 'secondary'}>{batch.status_effective}</Badge>
                                 </div>
                                 <CardDescription>Start: {format(new Date(batch.start_date), "d MMM yyyy")}</CardDescription>
                             </CardHeader>

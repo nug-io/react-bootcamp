@@ -13,6 +13,7 @@ export default defineConfig({
     host: true, // allow external access
     allowedHosts: [
       'bootcamp.xyralab.qzz.io',
+      'localhost:3000'
     ],
   },
 })

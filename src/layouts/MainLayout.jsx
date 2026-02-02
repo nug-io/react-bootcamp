@@ -14,16 +14,43 @@ const MainLayout = () => {
         <div className="flex flex-col min-h-screen">
             <header className="border-b bg-white">
                 <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-                    <Link to="/" className="text-xl font-bold">Bootcamp Platform</Link>
+                    <Link to="/" className="text-xl font-bold">
+                        Bootcamp Platform
+                    </Link>
                     <nav className="flex items-center gap-4">
                         {user ? (
                             <>
-                                <Link to="/batches" className="text-sm font-medium hover:text-primary">Batches</Link>
-                                <Link to="/dashboard" className="text-sm font-medium hover:text-primary">My Dashboard</Link>
-                                <button onClick={handleLogout} className="text-sm text-red-600 hover:text-red-700">Logout</button>
+                                <Link
+                                    to="/batches"
+                                    className="text-sm font-medium hover:text-primary"
+                                >
+                                    Batches
+                                </Link>
+                                <Link
+                                    to={
+                                        user.role === "ADMIN"
+                                            ? "/admin"
+                                            : "/dashboard"
+                                    }
+                                    className="text-sm font-medium hover:text-primary"
+                                >
+                                    My Dashboard
+                                </Link>
+
+                                <button
+                                    onClick={handleLogout}
+                                    className="text-sm text-red-600 hover:text-red-700"
+                                >
+                                    Logout
+                                </button>
                             </>
                         ) : (
-                            <Link to="/auth" className="text-sm font-medium hover:text-primary">Login / Register</Link>
+                            <Link
+                                to="/auth"
+                                className="text-sm font-medium hover:text-primary"
+                            >
+                                Login / Register
+                            </Link>
                         )}
                     </nav>
                 </div>
