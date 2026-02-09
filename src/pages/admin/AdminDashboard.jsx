@@ -25,7 +25,7 @@ const AdminDashboard = () => {
         // { id: "materials", label: "Materials", icon: BookOpen }, // Merged into Batches usually, but requirement says separate tab allowed or specific CRUD
         // Requirements: "Menu Kiri: Batch, Peserta, Materi"
         { id: "materials", label: "Material Management", icon: BookOpen },
-        // { id: "participants", label: "Participants", icon: Users },
+        { id: "participants", label: "Participants", icon: Users },
     ];
 
     return (

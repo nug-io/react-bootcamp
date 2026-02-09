@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
+import { extractErrorMessage } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -110,7 +111,8 @@ const MaterialManager = () => {
             const res = await api.get(`/material/batch/${selectedBatchId}`);
             setMaterials(res.data || []);
         } catch (error) {
-            toast.error(error.response?.data?.message || "Operation failed");
+            console.log(error);
+            toast.error(extractErrorMessage(error));
         }
     };
 

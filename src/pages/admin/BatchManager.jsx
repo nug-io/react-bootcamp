@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
+import { extractErrorMessage } from "@/lib/utils";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -187,7 +188,7 @@ const BatchManager = () => {
             fetchBatches(); // Refresh list
         } catch (error) {
             console.error(error);
-            toast.error(error.response?.data?.message || "Operation failed");
+            toast.error(extractErrorMessage(error));
         }
     };
 
@@ -293,7 +294,7 @@ const BatchManager = () => {
                     </Select>
                 </div>
 
-                <div className="flex items-center space-x-2 pb-2">
+                <div className="flex items-center space-x-2 pb-2 mt-4">
                     <Checkbox
                         id="is_full"
                         checked={queryParams.is_full}
