@@ -32,7 +32,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
     Plus,
     Edit,
-    Trash,
     CheckCircle,
     XCircle,
     Loader2,
@@ -44,25 +43,27 @@ import {
     ArrowDown,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import { useSearchParams } from "react-router-dom";
 
 const BatchManager = () => {
-    // URL Search Params for persistency (optional, but good practice)
-    // For simplicity as requested ("simple flow"), we'll stick to local state mainly,
-    // but using useSearchParams can be a nice touch if desired later.
-    // Sticking to useState for simplicity as per "junior friendly" request.
-
     const [batches, setBatches] = useState([]);
     const [loading, setLoading] = useState(true);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [editingBatch, setEditingBatch] = useState(null);
 
-    // Filter & Sort State
+    // Summary State (Backend-driven)
+    const [summary, setSummary] = useState({
+        active: 0,
+        open: 0,
+        ongoing: 0,
+        full: 0,
+    });
+
+    // Filter, Pagination & Sort State
     const [queryParams, setQueryParams] = useState({
         page: 1,
         limit: 10,
         q: "",
-        status: "ALL", // ALL is client-side concept for "no filter"
+        status: "ALL",
         is_full: false,
         orderBy: "created_at",
         orderDir: "desc",
@@ -88,7 +89,6 @@ const BatchManager = () => {
     const fetchBatches = useCallback(async () => {
         setLoading(true);
         try {
-            // Build query params
             const params = {
                 page: queryParams.page,
                 limit: queryParams.limit,
@@ -111,13 +111,22 @@ const BatchManager = () => {
                     totalPages: 1,
                 },
             );
+            // Set summary directly from backend response
+            setSummary(
+                res.summary || {
+                    active: 0,
+                    open: 0,
+                    ongoing: 0,
+                    full: 0,
+                },
+            );
         } catch (error) {
             console.error(error);
             toast.error("Failed to fetch batches");
         } finally {
             setLoading(false);
         }
-    }, [queryParams]); // Re-fetch when params change
+    }, [queryParams]);
 
     useEffect(() => {
         fetchBatches();
@@ -135,9 +144,11 @@ const BatchManager = () => {
     };
 
     const handleSearch = (e) => {
-        e.preventDefault();
-        // Trigger fetch via state change
-        // State update already triggers useEffect
+        setQueryParams((prev) => ({
+            ...prev,
+            q: e.target.value,
+            page: 1, // Reset page on search
+        }));
     };
 
     const handlePageChange = (newPage) => {
@@ -146,6 +157,7 @@ const BatchManager = () => {
         }
     };
 
+    // Dialog & Form Handlers
     const handleOpenDialog = (batch = null) => {
         if (batch) {
             setEditingBatch(batch);
@@ -175,7 +187,6 @@ const BatchManager = () => {
 
     const handleSave = async (e) => {
         e.preventDefault();
-
         try {
             if (editingBatch) {
                 await api.put(`/batch/${editingBatch.id}`, formData);
@@ -185,20 +196,17 @@ const BatchManager = () => {
                 toast.success("Batch created");
             }
             setIsDialogOpen(false);
-            fetchBatches(); // Refresh list
+            fetchBatches();
         } catch (error) {
             console.error(error);
             toast.error(extractErrorMessage(error));
         }
     };
 
-    // Helper to toggle status quickly
     const toggleStatus = async (batch) => {
         try {
             const newStatus = batch.status === "ACTIVE" ? "CLOSED" : "ACTIVE";
-            await api.put(`/batch/${batch.id}`, {
-                status: newStatus,
-            });
+            await api.put(`/batch/${batch.id}`, { status: newStatus });
             toast.success(`Batch ${newStatus}`);
             fetchBatches();
         } catch (error) {
@@ -206,7 +214,7 @@ const BatchManager = () => {
         }
     };
 
-    // Render Sort Icon
+    // Render Helpers
     const renderSortIcon = (field) => {
         if (queryParams.orderBy !== field)
             return <ArrowUpDown className="ml-2 h-4 w-4 opacity-50" />;
@@ -219,10 +227,16 @@ const BatchManager = () => {
 
     const renderPageNumbers = () => {
         const pages = [];
+        const maxPagesToShow = 5;
+        let startPage = Math.max(1, meta.page - 2);
+        let endPage = Math.min(meta.totalPages, startPage + maxPagesToShow - 1);
 
-        for (let i = 1; i <= meta.totalPages; i++) {
+        if (endPage - startPage < maxPagesToShow - 1) {
+            startPage = Math.max(1, endPage - maxPagesToShow + 1);
+        }
+
+        for (let i = startPage; i <= endPage; i++) {
             const isActive = i === meta.page;
-
             pages.push(
                 <Button
                     key={i}
@@ -235,270 +249,310 @@ const BatchManager = () => {
                 </Button>,
             );
         }
-
         return pages;
     };
 
     return (
         <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div className="flex items-center justify-between">
                 <h3 className="text-2xl font-bold tracking-tight">
                     Batch Management
                 </h3>
-                <Button onClick={() => handleOpenDialog()}>
-                    <Plus className="h-4 w-4 mr-2" /> Add Batch
-                </Button>
             </div>
 
-            {/* Filters Section */}
-            <div className="flex flex-col lg:flex-row gap-4 items-end lg:items-center bg-card p-4 rounded-lg border shadow-sm">
-                <div className="flex-1 w-full lg:w-auto space-y-2">
-                    <div className="relative">
-                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                        <Input
-                            placeholder="Search by title..."
-                            className="pl-8"
-                            value={queryParams.q}
-                            onChange={(e) =>
+            {/* Summary Cards Section (Backend Driven) */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-card border rounded-lg p-4 shadow-sm">
+                    <div className="text-sm font-medium text-muted-foreground">
+                        Active Batches
+                    </div>
+                    <div className="text-2xl font-bold">{summary.active}</div>
+                </div>
+                <div className="bg-card border rounded-lg p-4 shadow-sm">
+                    <div className="text-sm font-medium text-muted-foreground">
+                        Open for Enrollment
+                    </div>
+                    <div className="text-2xl font-bold text-green-600">
+                        {summary.open}
+                    </div>
+                </div>
+                <div className="bg-card border rounded-lg p-4 shadow-sm">
+                    <div className="text-sm font-medium text-muted-foreground">
+                        Ongoing Classes
+                    </div>
+                    <div className="text-2xl font-bold text-blue-600">
+                        {summary.ongoing}
+                    </div>
+                </div>
+                <div className="bg-card border rounded-lg p-4 shadow-sm">
+                    <div className="text-sm font-medium text-muted-foreground">
+                        Full Capacity
+                    </div>
+                    <div className="text-2xl font-bold text-red-600">
+                        {summary.full}
+                    </div>
+                </div>
+            </div>
+
+            {/* Main Content Card: Filters + Table + Pagination */}
+            <div className="bg-card border rounded-lg shadow-sm">
+                {/* Visual Header: Filters & Actions */}
+                <div className="p-4 border-b flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+                    {/* Left: Filters */}
+                    <div className="flex flex-col sm:flex-row gap-4 w-full lg:w-auto items-start sm:items-center flex-1">
+                        <div className="relative w-full sm:w-64">
+                            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                            <Input
+                                placeholder="Search by title..."
+                                className="pl-8"
+                                value={queryParams.q}
+                                onChange={handleSearch}
+                            />
+                        </div>
+
+                        <Select
+                            value={queryParams.status}
+                            onValueChange={(val) =>
                                 setQueryParams((prev) => ({
                                     ...prev,
-                                    q: e.target.value,
+                                    status: val,
                                     page: 1,
                                 }))
                             }
-                        />
+                        >
+                            <SelectTrigger className="w-full sm:w-[180px]">
+                                <SelectValue placeholder="Filter Status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="ALL">All Status</SelectItem>
+                                <SelectItem value="OPEN">Open</SelectItem>
+                                <SelectItem value="ONGOING">Ongoing</SelectItem>
+                                <SelectItem value="FINISHED">
+                                    Finished
+                                </SelectItem>
+                                <SelectItem value="CLOSED">Closed</SelectItem>
+                            </SelectContent>
+                        </Select>
+
+                        <div className="flex items-center space-x-2">
+                            <Checkbox
+                                id="is_full"
+                                checked={queryParams.is_full}
+                                onCheckedChange={(checked) =>
+                                    setQueryParams((prev) => ({
+                                        ...prev,
+                                        is_full: checked,
+                                        page: 1,
+                                    }))
+                                }
+                            />
+                            <Label
+                                htmlFor="is_full"
+                                className="cursor-pointer whitespace-nowrap"
+                            >
+                                Only Full Batches
+                            </Label>
+                        </div>
                     </div>
+
+                    {/* Right: Primary Action */}
+                    <Button onClick={() => handleOpenDialog()}>
+                        <Plus className="h-4 w-4 mr-2" /> Add Batch
+                    </Button>
                 </div>
 
-                <div className="w-full lg:w-48 space-y-2">
-                    <Select
-                        value={queryParams.status}
-                        onValueChange={(val) =>
-                            setQueryParams((prev) => ({
-                                ...prev,
-                                status: val,
-                                page: 1,
-                            }))
-                        }
-                    >
-                        <SelectTrigger>
-                            <SelectValue placeholder="Filter Status" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="ALL">All Status</SelectItem>
-                            <SelectItem value="OPEN">Open</SelectItem>
-                            <SelectItem value="ONGOING">Ongoing</SelectItem>
-                            <SelectItem value="FINISHED">Finished</SelectItem>
-                            <SelectItem value="CLOSED">Closed</SelectItem>
-                        </SelectContent>
-                    </Select>
-                </div>
-
-                <div className="flex items-center space-x-2 pb-2 mt-4">
-                    <Checkbox
-                        id="is_full"
-                        checked={queryParams.is_full}
-                        onCheckedChange={(checked) =>
-                            setQueryParams((prev) => ({
-                                ...prev,
-                                is_full: checked,
-                                page: 1,
-                            }))
-                        }
-                    />
-                    <Label htmlFor="is_full" className="cursor-pointer">
-                        Only Full Batches
-                    </Label>
-                </div>
-            </div>
-
-            {/* Table Section */}
-            <div className="border rounded-md shadow-sm bg-card">
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead className="w-[50px]">#</TableHead>
-                            <TableHead>
-                                <Button
-                                    variant="ghost"
-                                    onClick={() => handleSort("title")}
-                                    className="-ml-4"
-                                >
-                                    Title
-                                    {renderSortIcon("title")}
-                                </Button>
-                            </TableHead>
-                            <TableHead>
-                                <Button
-                                    variant="ghost"
-                                    onClick={() => handleSort("start_date")}
-                                    className="-ml-4"
-                                >
-                                    Start Date
-                                    {renderSortIcon("start_date")}
-                                </Button>
-                            </TableHead>
-                            <TableHead>
-                                <Button
-                                    variant="ghost"
-                                    onClick={() => handleSort("price")}
-                                    className="-ml-4"
-                                >
-                                    Price
-                                    {renderSortIcon("price")}
-                                </Button>
-                            </TableHead>
-                            <TableHead>
-                                <Button
-                                    variant="ghost"
-                                    onClick={() =>
-                                        handleSort("remaining_quota")
-                                    }
-                                    className="-ml-4"
-                                >
-                                    Quota
-                                    {renderSortIcon("remaining_quota")}
-                                </Button>
-                            </TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead className="text-right">
-                                Actions
-                            </TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {loading ? (
+                {/* Table Section */}
+                <div className="p-0">
+                    <Table>
+                        <TableHeader>
                             <TableRow>
-                                <TableCell
-                                    colSpan={7}
-                                    className="text-center py-8"
-                                >
-                                    <Loader2 className="animate-spin h-8 w-8 mx-auto text-primary/50" />
-                                </TableCell>
+                                <TableHead className="w-[50px]">#</TableHead>
+                                <TableHead>
+                                    <Button
+                                        variant="ghost"
+                                        onClick={() => handleSort("title")}
+                                        className="-ml-4 hover:bg-transparent"
+                                    >
+                                        Title
+                                        {renderSortIcon("title")}
+                                    </Button>
+                                </TableHead>
+                                <TableHead>
+                                    <Button
+                                        variant="ghost"
+                                        onClick={() => handleSort("start_date")}
+                                        className="-ml-4 hover:bg-transparent"
+                                    >
+                                        Start Date
+                                        {renderSortIcon("start_date")}
+                                    </Button>
+                                </TableHead>
+                                <TableHead>
+                                    <Button
+                                        variant="ghost"
+                                        onClick={() => handleSort("price")}
+                                        className="-ml-4 hover:bg-transparent"
+                                    >
+                                        Price
+                                        {renderSortIcon("price")}
+                                    </Button>
+                                </TableHead>
+                                <TableHead>
+                                    <Button
+                                        variant="ghost"
+                                        onClick={() =>
+                                            handleSort("remaining_quota")
+                                        }
+                                        className="-ml-4 hover:bg-transparent"
+                                    >
+                                        Quota
+                                        {renderSortIcon("remaining_quota")}
+                                    </Button>
+                                </TableHead>
+                                <TableHead>Status</TableHead>
+                                <TableHead className="text-right">
+                                    Actions
+                                </TableHead>
                             </TableRow>
-                        ) : batches.length > 0 ? (
-                            batches.map((batch, index) => (
-                                <TableRow key={batch.id}>
-                                    <TableCell>
-                                        {(meta.page - 1) * meta.limit +
-                                            index +
-                                            1}
-                                    </TableCell>
-                                    <TableCell className="font-medium">
-                                        {batch.title}
-                                    </TableCell>
-                                    <TableCell>
-                                        {format(
-                                            new Date(batch.start_date),
-                                            "d MMM yyyy",
-                                        )}
-                                    </TableCell>
-                                    <TableCell>
-                                        Rp{" "}
-                                        {parseInt(batch.price).toLocaleString(
-                                            "id-ID",
-                                        )}
-                                    </TableCell>
-                                    <TableCell>
-                                        <div className="flex items-center gap-2">
-                                            <span
-                                                className={
-                                                    batch.remaining_quota === 0
-                                                        ? "text-red-500 font-bold"
-                                                        : ""
-                                                }
-                                            >
-                                                {batch.enrolled_count}
-                                            </span>
-                                            <span className="text-muted-foreground text-xs">
-                                                / {batch.quota}
-                                            </span>
-                                        </div>
-                                    </TableCell>
-                                    <TableCell>
-                                        <Badge
-                                            variant={
-                                                batch.status_effective ===
-                                                "OPEN"
-                                                    ? "default"
-                                                    : batch.status_effective ===
-                                                        "CLOSED"
-                                                      ? "destructive"
-                                                      : "secondary"
-                                            }
-                                        >
-                                            {batch.status_effective}
-                                        </Badge>
-                                    </TableCell>
-                                    <TableCell className="text-right space-x-2">
-                                        <Button
-                                            size="icon"
-                                            variant="ghost"
-                                            onClick={() => toggleStatus(batch)}
-                                            title={
-                                                batch.status === "ACTIVE"
-                                                    ? "Close Batch"
-                                                    : "Re-activate Batch"
-                                            }
-                                        >
-                                            {batch.status === "ACTIVE" ? (
-                                                <XCircle className="h-4 w-4 text-red-500" />
-                                            ) : (
-                                                <CheckCircle className="h-4 w-4 text-green-500" />
-                                            )}
-                                        </Button>
-                                        <Button
-                                            size="icon"
-                                            variant="outline"
-                                            onClick={() =>
-                                                handleOpenDialog(batch)
-                                            }
-                                        >
-                                            <Edit className="h-4 w-4" />
-                                        </Button>
+                        </TableHeader>
+                        <TableBody>
+                            {loading ? (
+                                <TableRow>
+                                    <TableCell
+                                        colSpan={7}
+                                        className="text-center py-8"
+                                    >
+                                        <Loader2 className="animate-spin h-8 w-8 mx-auto text-primary/50" />
                                     </TableCell>
                                 </TableRow>
-                            ))
-                        ) : (
-                            <TableRow>
-                                <TableCell
-                                    colSpan={7}
-                                    className="text-center py-12 text-muted-foreground"
-                                >
-                                    No batches found matching your criteria.
-                                </TableCell>
-                            </TableRow>
-                        )}
-                    </TableBody>
-                </Table>
-            </div>
-
-            {/* Pagination Controls */}
-            <div className="flex items-center justify-between">
-                <div className="text-sm text-muted-foreground">
-                    Page {meta.page} of {meta.totalPages} ({meta.total} items)
+                            ) : batches.length > 0 ? (
+                                batches.map((batch, index) => (
+                                    <TableRow key={batch.id}>
+                                        <TableCell>
+                                            {(meta.page - 1) * meta.limit +
+                                                index +
+                                                1}
+                                        </TableCell>
+                                        <TableCell className="font-medium">
+                                            {batch.title}
+                                        </TableCell>
+                                        <TableCell>
+                                            {format(
+                                                new Date(batch.start_date),
+                                                "d MMM yyyy",
+                                            )}
+                                        </TableCell>
+                                        <TableCell>
+                                            Rp{" "}
+                                            {parseInt(
+                                                batch.price,
+                                            ).toLocaleString("id-ID")}
+                                        </TableCell>
+                                        <TableCell>
+                                            <div className="flex items-center gap-2">
+                                                <span
+                                                    className={
+                                                        batch.remaining_quota ===
+                                                        0
+                                                            ? "text-red-500 font-bold"
+                                                            : ""
+                                                    }
+                                                >
+                                                    {batch.enrolled_count}
+                                                </span>
+                                                <span className="text-muted-foreground text-xs">
+                                                    / {batch.quota}
+                                                </span>
+                                            </div>
+                                        </TableCell>
+                                        <TableCell>
+                                            <Badge
+                                                variant={
+                                                    batch.status_effective ===
+                                                    "OPEN"
+                                                        ? "default"
+                                                        : batch.status_effective ===
+                                                            "CLOSED"
+                                                          ? "destructive"
+                                                          : "secondary"
+                                                }
+                                            >
+                                                {batch.status_effective}
+                                            </Badge>
+                                        </TableCell>
+                                        <TableCell className="text-right space-x-2">
+                                            <Button
+                                                size="icon"
+                                                variant="ghost"
+                                                onClick={() =>
+                                                    toggleStatus(batch)
+                                                }
+                                                title={
+                                                    batch.status === "ACTIVE"
+                                                        ? "Close Batch"
+                                                        : "Re-activate Batch"
+                                                }
+                                            >
+                                                {batch.status === "ACTIVE" ? (
+                                                    <XCircle className="h-4 w-4 text-red-500" />
+                                                ) : (
+                                                    <CheckCircle className="h-4 w-4 text-green-500" />
+                                                )}
+                                            </Button>
+                                            <Button
+                                                size="icon"
+                                                variant="outline"
+                                                onClick={() =>
+                                                    handleOpenDialog(batch)
+                                                }
+                                            >
+                                                <Edit className="h-4 w-4" />
+                                            </Button>
+                                        </TableCell>
+                                    </TableRow>
+                                ))
+                            ) : (
+                                <TableRow>
+                                    <TableCell
+                                        colSpan={7}
+                                        className="text-center py-12 text-muted-foreground"
+                                    >
+                                        No batches found matching your criteria.
+                                    </TableCell>
+                                </TableRow>
+                            )}
+                        </TableBody>
+                    </Table>
                 </div>
 
-                <div className="flex items-center space-x-2">
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handlePageChange(meta.page - 1)}
-                        disabled={meta.page <= 1}
-                    >
-                        <ChevronLeft className="h-4 w-4" />
-                    </Button>
+                {/* Pagination Controls */}
+                <div className="p-4 border-t flex items-center justify-between">
+                    <div className="text-sm text-muted-foreground">
+                        Page {meta.page} of {meta.totalPages} ({meta.total}{" "}
+                        items)
+                    </div>
 
-                    {renderPageNumbers()}
+                    <div className="flex items-center space-x-2">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handlePageChange(meta.page - 1)}
+                            disabled={meta.page <= 1}
+                        >
+                            <ChevronLeft className="h-4 w-4" />
+                        </Button>
 
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handlePageChange(meta.page + 1)}
-                        disabled={meta.page >= meta.totalPages}
-                    >
-                        <ChevronRight className="h-4 w-4" />
-                    </Button>
+                        {renderPageNumbers()}
+
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handlePageChange(meta.page + 1)}
+                            disabled={meta.page >= meta.totalPages}
+                        >
+                            <ChevronRight className="h-4 w-4" />
+                        </Button>
+                    </div>
                 </div>
             </div>
 
