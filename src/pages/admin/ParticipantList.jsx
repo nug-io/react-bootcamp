@@ -247,6 +247,16 @@ const ParticipantList = () => {
                             <TableHead>
                                 <Button
                                     variant="ghost"
+                                    onClick={() => handleSort("payment_status")}
+                                    className="-ml-4"
+                                >
+                                    Payment Status
+                                    {renderSortIcon("payment_status")}
+                                </Button>
+                            </TableHead>
+                            <TableHead>
+                                <Button
+                                    variant="ghost"
                                     onClick={() => handleSort("enrolled_at")}
                                     className="-ml-4"
                                 >
@@ -275,6 +285,31 @@ const ParticipantList = () => {
                                     <TableCell>{enr.user?.email || "-"}</TableCell>
                                     <TableCell>{enr.user?.phone_number || "-"}</TableCell>
                                     <TableCell>{enr.batch?.title || enr.batch_id}</TableCell>
+                                    <TableCell>
+                                        <Badge
+                                            variant={
+                                                enr.payment_status === "PAID"
+                                                    ? "default"
+                                                    : enr.payment_status === "PENDING"
+                                                        ? "warning" // Assuming we might need a custom variant or just use class
+                                                        : "secondary"
+                                            }
+                                            className={
+                                                enr.payment_status === "PAID"
+                                                    ? "bg-green-600 hover:bg-green-700"
+                                                    : enr.payment_status === "PENDING"
+                                                        ? "bg-yellow-600 hover:bg-yellow-700"
+                                                        : "bg-gray-500"
+                                            }
+                                        >
+                                            {enr.payment_status}
+                                        </Badge>
+                                        {enr.payment_status === "PENDING" && enr.expires_at && (
+                                            <div className="text-xs text-muted-foreground mt-1">
+                                                Exp: {format(new Date(enr.expires_at), "d MMM HH:mm")}
+                                            </div>
+                                        )}
+                                    </TableCell>
                                     <TableCell>
                                         {enr.enrolled_at
                                             ? format(new Date(enr.enrolled_at), "d MMM yyyy, HH:mm")

@@ -15,6 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import toast from "react-hot-toast";
 import { format } from "date-fns";
 import { ArrowLeft } from "lucide-react";
+import useMidtrans from "@/hooks/useMidtrans";
 
 const BatchDetail = () => {
     const { batchId } = useParams();
@@ -22,14 +23,12 @@ const BatchDetail = () => {
     const [batch, setBatch] = useState(null);
     const [loading, setLoading] = useState(true);
     const [enrolling, setEnrolling] = useState(false);
+    const { snap } = useMidtrans();
 
     useEffect(() => {
         const fetchBatch = async () => {
             try {
-                const res = await api.get(`/batch`); // MVP: fetch list and find, or assume endpoint exists.
-                // User spec said: GET /batch/:id is supported.
-                // Let's try direct fetch if supported, otherwise find from list.
-                // Actually specs say GET /batch/:id exists.
+                // Try direct fetch first
                 const detailRes = await api
                     .get(`/batch/${batchId}`)
                     .catch(() => null);
@@ -37,7 +36,7 @@ const BatchDetail = () => {
                 if (detailRes) {
                     setBatch(detailRes.data);
                 } else {
-                    // Fallback to finding in list if detail endpoint fails/not implemented yet
+                    // Fallback to finding in list
                     const listRes = await api.get("/batch");
                     const found = listRes.data.find(
                         (b) => b.id === parseInt(batchId),
@@ -53,6 +52,30 @@ const BatchDetail = () => {
         fetchBatch();
     }, [batchId]);
 
+    const processPayment = (snapToken) => {
+        if (snap) {
+            snap.pay(snapToken, {
+                onSuccess: (result) => {
+                    toast.success("Pembayaran Berhasil!");
+                    navigate("/enroll/success", { state: { batch, result } });
+                },
+                onPending: (result) => {
+                    toast.success("Menunggu Pembayaran...");
+                    navigate("/enroll/success", { state: { batch, result, pending: true } });
+                },
+                onError: (result) => {
+                    toast.error("Pembayaran Gagal");
+                    console.error(result);
+                },
+                onClose: () => {
+                    toast("Anda menutup popup pembayaran", { icon: "ℹ️" });
+                },
+            });
+        } else {
+            toast.error("Sistem pembayaran belum siap. Silakan refresh halaman.");
+        }
+    };
+
     const handleEnroll = async () => {
         if (batch.is_full === true) {
             toast.error("Pendaftaran sudah penuh");
@@ -61,11 +84,39 @@ const BatchDetail = () => {
 
         setEnrolling(true);
         try {
-            await api.post("/enrollment", { batch_id: parseInt(batchId) });
-            toast.success("Berhasil mendaftar!");
-            navigate("/enroll/success", { state: { batch } });
+            const res = await api.post("/enrollment", { batch_id: parseInt(batchId) });
+
+            // Check for Snap Token or Resume Payment
+            if (res.data?.snapToken) {
+                processPayment(res.data.snapToken);
+            } else if (res.data?.resumePayment && res.data?.snapToken) {
+                // Handle specific resume case if implementation detail differs, 
+                // but typically it just provides the token again.
+                processPayment(res.data.snapToken);
+            } else if (res.data?.resumePayment) {
+                // Logic if new token is needed or handled differently
+                toast("Anda sudah terdaftar, meneruskan pembayaran...", { icon: "🔄" });
+                // If backend assumes we reuse token, it should send it.
+                // If not sent, we might need another call or it's handled.
+                // Based on prompt: "Trigger ulang Midtrans Snap" implies we get a token.
+                // Assuming backend sends token even on resumePayment=true
+                if (res.data.snapToken) {
+                    processPayment(res.data.snapToken);
+                } else {
+                    navigate("/dashboard"); // Fallback
+                }
+            } else {
+                // Free batch or immediate success
+                toast.success("Berhasil mendaftar!");
+                navigate("/enroll/success", { state: { batch } });
+            }
+
         } catch (error) {
             if (error.response?.status === 409) {
+                // If 409 but we want to allow resume?
+                // Prompt says: "Jika response berisi resumePayment = true ... JANGAN error"
+                // So typically the backend should return 200 OK with resumePayment: true
+                // If backend returns 409, we stick to error.
                 toast.error("Anda sudah terdaftar di batch ini");
             } else {
                 toast.error(error.response?.data?.message || "Gagal mendaftar");
@@ -164,7 +215,7 @@ const BatchDetail = () => {
                             onClick={handleEnroll}
                             disabled={enrolling}
                         >
-                            {enrolling ? "Memproses..." : "Daftar ke Batch Ini"}
+                            {enrolling ? "Memproses..." : "Daftar & Bayar"}
                         </Button>
                     ) : (
                         <Button

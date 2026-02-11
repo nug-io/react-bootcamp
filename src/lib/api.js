@@ -16,19 +16,24 @@ api.interceptors.request.use(
     },
     (error) => {
         return Promise.reject(error);
-    }
+    },
 );
 
 // Response interceptor for error handling
 api.interceptors.response.use(
-    (response) => response.data, // Return data directly for cleaner usage
+    (response) => {
+        // Return data directly if successful
+        return response.data ? response.data : response;
+    },
     (error) => {
-        // Optional: Handle 401 globally (e.g. redirect to login)
-        if (error.response?.status === 401) {
-            // Clear token if invalid?
-            // localStorage.removeItem('token'); 
-            // window.location.href = '/auth'; // Simple redirect, or use event bus
+        const status = error.response ? error.response.status : null;
+        const hasAuthHeader = error.config?.headers?.Authorization;
+
+        if (status === 401 && hasAuthHeader) {
+            // Global 401 handling: Clear token and redirect
+            localStorage.removeItem("token");
+            window.location.href = "/auth";
         }
         return Promise.reject(error);
-    }
+    },
 );
