@@ -70,7 +70,7 @@ const MaterialView = () => {
                             {/* Fallback for video URL if property exists */}
                             {material.video_url ? (
                                 <ReactPlayer
-                                    url={material.video_url}
+                                    src={material.video_url}
                                     width="100%"
                                     height="100%"
                                     controls

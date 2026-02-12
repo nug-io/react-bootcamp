@@ -94,7 +94,7 @@ const MaterialManager = () => {
             const payload = {
                 title: formData.title,
                 content: formData.content,
-                // video_url: formData.video_url,
+                video_url: formData.video_url,
                 order: Number(formData.order),
                 batch_id: Number(selectedBatchId),
             };

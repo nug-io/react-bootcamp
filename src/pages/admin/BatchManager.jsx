@@ -164,9 +164,9 @@ const BatchManager = () => {
             setFormData({
                 title: batch.title,
                 start_date: batch.start_date
-                    ? batch.start_date.split("T")[0]
+                    ? formatDateLocal(batch.start_date)
                     : "",
-                end_date: batch.end_date ? batch.end_date.split("T")[0] : "",
+                end_date: batch.end_date ? formatDateLocal(batch.end_date) : "",
                 price: Number(batch.price),
                 quota: Number(batch.quota),
                 status: batch.status,
@@ -250,6 +250,16 @@ const BatchManager = () => {
             );
         }
         return pages;
+    };
+
+    const formatDateLocal = (dateString) => {
+        const date = new Date(dateString);
+
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+
+        return `${year}-${month}-${day}`;
     };
 
     return (
