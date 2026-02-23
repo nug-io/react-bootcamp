@@ -32,6 +32,8 @@ const LandingPage = () => {
         fetchBatches();
     }, []);
 
+    const isLoggedIn = !!localStorage.getItem("token");
+
     return (
         <div className="flex flex-col min-h-screen">
             {/* Hero Section */}
@@ -169,7 +171,9 @@ const LandingPage = () => {
                                                 to={
                                                     batch.status_effective ===
                                                     "OPEN"
-                                                        ? "/auth"
+                                                        ? isLoggedIn
+                                                            ? `/batches/${batch.id}`
+                                                            : `/auth?redirect=/batches/${batch.id}`
                                                         : "#"
                                                 }
                                             >

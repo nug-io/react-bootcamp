@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
     Search,
@@ -25,7 +26,7 @@ import {
     Loader2,
     ArrowUpDown,
     ArrowUp,
-    ArrowDown
+    ArrowDown,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -84,7 +85,9 @@ const ParticipantList = () => {
 
             const res = await api.get("/enrollment", { params });
             setEnrollments(res.data || []);
-            setMeta(res.meta || { page: 1, limit: 10, total: 0, totalPages: 1 });
+            setMeta(
+                res.meta || { page: 1, limit: 10, total: 0, totalPages: 1 },
+            );
         } catch (error) {
             console.error(error);
             setEnrollments([]); // Clear on error or handle gracefully
@@ -163,7 +166,7 @@ const ParticipantList = () => {
                     className={isActive ? "cursor-default" : ""}
                 >
                     {i}
-                </Button>
+                </Button>,
             );
         }
         return pages;
@@ -171,7 +174,9 @@ const ParticipantList = () => {
 
     return (
         <div className="space-y-6">
-            <h3 className="text-2xl font-bold tracking-tight">Participant List</h3>
+            <h3 className="text-2xl font-bold tracking-tight">
+                Participant List
+            </h3>
 
             {/* Filters Section */}
             <div className="flex flex-col md:flex-row gap-4 items-end md:items-center bg-card p-4 rounded-lg border shadow-sm">
@@ -198,7 +203,10 @@ const ParticipantList = () => {
                         <SelectContent>
                             <SelectItem value="ALL">All Batches</SelectItem>
                             {batches.map((batch) => (
-                                <SelectItem key={batch.id} value={batch.id.toString()}>
+                                <SelectItem
+                                    key={batch.id}
+                                    value={batch.id.toString()}
+                                >
                                     {batch.title}
                                 </SelectItem>
                             ))}
@@ -269,7 +277,10 @@ const ParticipantList = () => {
                     <TableBody>
                         {loading ? (
                             <TableRow>
-                                <TableCell colSpan={6} className="text-center py-8">
+                                <TableCell
+                                    colSpan={6}
+                                    className="text-center py-8"
+                                >
                                     <Loader2 className="animate-spin h-8 w-8 mx-auto text-primary/50" />
                                 </TableCell>
                             </TableRow>
@@ -277,50 +288,74 @@ const ParticipantList = () => {
                             enrollments.map((enr, index) => (
                                 <TableRow key={enr.id || index}>
                                     <TableCell>
-                                        {(meta.page - 1) * meta.limit + index + 1}
+                                        {(meta.page - 1) * meta.limit +
+                                            index +
+                                            1}
                                     </TableCell>
                                     <TableCell className="font-medium">
                                         {enr.user?.name || "Unknown"}
                                     </TableCell>
-                                    <TableCell>{enr.user?.email || "-"}</TableCell>
-                                    <TableCell>{enr.user?.phone_number || "-"}</TableCell>
-                                    <TableCell>{enr.batch?.title || enr.batch_id}</TableCell>
+                                    <TableCell>
+                                        {enr.user?.email || "-"}
+                                    </TableCell>
+                                    <TableCell>
+                                        {enr.user?.phone_number || "-"}
+                                    </TableCell>
+                                    <TableCell>
+                                        {enr.batch?.title || enr.batch_id}
+                                    </TableCell>
                                     <TableCell>
                                         <Badge
                                             variant={
                                                 enr.payment_status === "PAID"
                                                     ? "default"
-                                                    : enr.payment_status === "PENDING"
-                                                        ? "warning" // Assuming we might need a custom variant or just use class
-                                                        : "secondary"
+                                                    : enr.payment_status ===
+                                                        "PENDING"
+                                                      ? "warning" // Assuming we might need a custom variant or just use class
+                                                      : "secondary"
                                             }
                                             className={
                                                 enr.payment_status === "PAID"
                                                     ? "bg-green-600 hover:bg-green-700"
-                                                    : enr.payment_status === "PENDING"
-                                                        ? "bg-yellow-600 hover:bg-yellow-700"
-                                                        : "bg-gray-500"
+                                                    : enr.payment_status ===
+                                                        "PENDING"
+                                                      ? "bg-yellow-600 hover:bg-yellow-700"
+                                                      : "bg-gray-500"
                                             }
                                         >
                                             {enr.payment_status}
                                         </Badge>
-                                        {enr.payment_status === "PENDING" && enr.expires_at && (
-                                            <div className="text-xs text-muted-foreground mt-1">
-                                                Exp: {format(new Date(enr.expires_at), "d MMM HH:mm")}
-                                            </div>
-                                        )}
+                                        {enr.payment_status === "PENDING" &&
+                                            enr.expires_at && (
+                                                <div className="text-xs text-muted-foreground mt-1">
+                                                    Exp:{" "}
+                                                    {format(
+                                                        new Date(
+                                                            enr.expires_at,
+                                                        ),
+                                                        "d MMM HH:mm",
+                                                    )}
+                                                </div>
+                                            )}
                                     </TableCell>
                                     <TableCell>
                                         {enr.enrolled_at
-                                            ? format(new Date(enr.enrolled_at), "d MMM yyyy, HH:mm")
+                                            ? format(
+                                                  new Date(enr.enrolled_at),
+                                                  "d MMM yyyy, HH:mm",
+                                              )
                                             : "-"}
                                     </TableCell>
                                 </TableRow>
                             ))
                         ) : (
                             <TableRow>
-                                <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
-                                    No participants found matching your criteria.
+                                <TableCell
+                                    colSpan={6}
+                                    className="text-center py-12 text-muted-foreground"
+                                >
+                                    No participants found matching your
+                                    criteria.
                                 </TableCell>
                             </TableRow>
                         )}

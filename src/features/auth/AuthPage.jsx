@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, useLocation, Link } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,7 +29,14 @@ const registerSchema = loginSchema.extend({
 
 const AuthPage = () => {
     const [isLogin, setIsLogin] = useState(true);
+
     const navigate = useNavigate();
+    const location = useLocation();
+
+    // Ambil redirect dari query
+    const params = new URLSearchParams(location.search);
+    const redirect = params.get("redirect") || "/";
+
     const { login, register: registerUser } = useAuthStore();
 
     const schema = isLogin ? loginSchema : registerSchema;
@@ -56,11 +63,10 @@ const AuthPage = () => {
             const role = user?.role?.toLowerCase();
 
             const redirectMap = {
-                admin: "/admin",
-                user: "/batches",
+                admin: "/admin"
             };
 
-            navigate(redirectMap[role] || "/batches");
+            navigate(redirectMap[role] || redirect, { replace: true });
         } catch (error) {
             toast.error(
                 error.response?.data?.message || "Authentication failed",
