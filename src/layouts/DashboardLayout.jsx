@@ -32,6 +32,11 @@ const DashboardLayout = () => {
                         active={location.pathname === "/dashboard"}
                     />
                     <SidebarItem
+                        to="/dashboard/payments"
+                        label="My Payments"
+                        active={location.pathname === "/dashboard/payments"}
+                    />
+                    <SidebarItem
                         to="/batches"
                         label="Browse Batches"
                         active={location.pathname === "/batches"}

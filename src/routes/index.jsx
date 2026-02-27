@@ -13,6 +13,7 @@ import UserDashboard from "@/pages/dashboard/UserDashboard";
 import BatchList from "@/pages/dashboard/BatchList";
 import BatchDetail from "@/pages/dashboard/BatchDetail";
 import MaterialView from "@/pages/dashboard/MaterialView";
+import MyPaymentsPage from "@/pages/dashboard/MyPaymentsPage";
 import AdminDashboard from "@/pages/admin/AdminDashboard";
 import ThankYouPage from "@/pages/dashboard/ThankYouPage";
 
@@ -68,6 +69,7 @@ export const AppRoutes = () => {
 
                 <Route element={<DashboardLayout />}>
                     <Route path="/dashboard" element={<UserDashboard />} />
+                    <Route path="/dashboard/payments" element={<MyPaymentsPage />} />
                     <Route path="/dashboard/materials/:materialId" element={<MaterialView />} />
                 </Route>
             </Route>
