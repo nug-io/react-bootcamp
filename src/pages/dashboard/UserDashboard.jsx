@@ -20,7 +20,7 @@ const UserDashboard = () => {
     useEffect(() => {
         const fetchEnrollments = async () => {
             try {
-                const res = await api.get("/enrollment/my-enrollments");
+                const res = await api.get("/enrollment/my-enrollment");
                 setEnrollments(res.data || []);
                 if (res.data && res.data.length > 0) {
                     setSelectedBatchId(res.data[0].batch_id); // Default select first
