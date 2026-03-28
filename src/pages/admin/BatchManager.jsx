@@ -79,6 +79,9 @@ const BatchManager = () => {
     // Form State
     const [formData, setFormData] = useState({
         title: "",
+        description: "",
+        type: "LIVE",
+        tags: "",
         start_date: "",
         end_date: "",
         price: "",
@@ -163,6 +166,9 @@ const BatchManager = () => {
             setEditingBatch(batch);
             setFormData({
                 title: batch.title,
+                description: batch.description || "",
+                type: batch.type || "LIVE",
+                tags: batch.tags ? batch.tags.join(", ") : "",
                 start_date: batch.start_date
                     ? formatDateLocal(batch.start_date)
                     : "",
@@ -175,6 +181,9 @@ const BatchManager = () => {
             setEditingBatch(null);
             setFormData({
                 title: "",
+                description: "",
+                type: "LIVE",
+                tags: "",
                 start_date: "",
                 end_date: "",
                 price: "",
@@ -188,11 +197,28 @@ const BatchManager = () => {
     const handleSave = async (e) => {
         e.preventDefault();
         try {
+            const payload = {
+                ...formData,
+                tags: formData.tags
+                    ? formData.tags
+                          .split(",")
+                          .map((t) => t.trim())
+                          .filter(Boolean)
+                    : [],
+            };
+
+            // Remove invalid fields for COURSE
+            if (payload.type === "COURSE") {
+                delete payload.start_date;
+                delete payload.end_date;
+                delete payload.quota;
+            }
+
             if (editingBatch) {
-                await api.put(`/batch/${editingBatch.id}`, formData);
+                await api.put(`/batch/${editingBatch.id}`, payload);
                 toast.success("Batch updated");
             } else {
-                await api.post("/batch", formData);
+                await api.post("/batch", payload);
                 toast.success("Batch created");
             }
             setIsDialogOpen(false);
@@ -589,35 +615,102 @@ const BatchManager = () => {
                                 placeholder="Fullstack Batch 1"
                             />
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <Label>Start Date</Label>
-                                <Input
-                                    type="date"
-                                    value={formData.start_date}
-                                    onChange={(e) =>
-                                        setFormData({
-                                            ...formData,
-                                            start_date: e.target.value,
-                                        })
-                                    }
-                                    required
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <Label>End Date</Label>
-                                <Input
-                                    type="date"
-                                    value={formData.end_date}
-                                    onChange={(e) =>
-                                        setFormData({
-                                            ...formData,
-                                            end_date: e.target.value,
-                                        })
-                                    }
-                                />
-                            </div>
+                        <div className="space-y-2">
+                            <Label>Description</Label>
+                            <textarea
+                                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                value={formData.description}
+                                onChange={(e) =>
+                                    setFormData({
+                                        ...formData,
+                                        description: e.target.value,
+                                    })
+                                }
+                                placeholder="Describe this batch..."
+                                rows={3}
+                            />
                         </div>
+
+                        <div className="space-y-2">
+                            <Label>Batch Type</Label>
+                            <Select
+                                value={formData.type}
+                                onValueChange={(val) =>
+                                    setFormData({
+                                        ...formData,
+                                        type: val,
+                                        // Reset fields if switching to COURSE
+                                        ...(val === "COURSE" && {
+                                            start_date: "",
+                                            end_date: "",
+                                            quota: "",
+                                        }),
+                                    })
+                                }
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select type" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="LIVE">
+                                        LIVE - Fixed schedule & quota
+                                    </SelectItem>
+                                    <SelectItem value="COURSE">
+                                        COURSE - Flexible, no time limit
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label>Tags</Label>
+                            <Input
+                                value={formData.tags}
+                                onChange={(e) =>
+                                    setFormData({
+                                        ...formData,
+                                        tags: e.target.value,
+                                    })
+                                }
+                                placeholder="e.g. react, frontend, beginner (comma separated)"
+                            />
+                            <p className="text-[0.8rem] text-muted-foreground">
+                                Separate tags with commas.
+                            </p>
+                        </div>
+
+                        {formData.type === "LIVE" && (
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label>Start Date</Label>
+                                    <Input
+                                        type="date"
+                                        value={formData.start_date}
+                                        onChange={(e) =>
+                                            setFormData({
+                                                ...formData,
+                                                start_date: e.target.value,
+                                            })
+                                        }
+                                        required={formData.type === "LIVE"}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>End Date</Label>
+                                    <Input
+                                        type="date"
+                                        value={formData.end_date}
+                                        onChange={(e) =>
+                                            setFormData({
+                                                ...formData,
+                                                end_date: e.target.value,
+                                            })
+                                        }
+                                    />
+                                </div>
+                            </div>
+                        )}
+
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
                                 <Label>Price</Label>
@@ -634,21 +727,23 @@ const BatchManager = () => {
                                     placeholder="5000000"
                                 />
                             </div>
-                            <div className="space-y-2">
-                                <Label>Quota</Label>
-                                <Input
-                                    type="number"
-                                    value={formData.quota}
-                                    onChange={(e) =>
-                                        setFormData({
-                                            ...formData,
-                                            quota: Number(e.target.value),
-                                        })
-                                    }
-                                    required
-                                    placeholder="50"
-                                />
-                            </div>
+                            {formData.type === "LIVE" && (
+                                <div className="space-y-2">
+                                    <Label>Quota</Label>
+                                    <Input
+                                        type="number"
+                                        value={formData.quota}
+                                        onChange={(e) =>
+                                            setFormData({
+                                                ...formData,
+                                                quota: Number(e.target.value),
+                                            })
+                                        }
+                                        required={formData.type === "LIVE"}
+                                        placeholder="50"
+                                    />
+                                </div>
+                            )}
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">

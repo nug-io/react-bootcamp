@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { api } from "@/lib/api";
+import TagFilter from "@/components/TagFilter";
 import {
     Card,
     CardHeader,
@@ -21,6 +22,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { format } from "date-fns";
+import { X, Search, Filter } from "lucide-react";
 
 // ---------------------------------------------------------------------------
 // Helper: build query string, skip empty/undefined values
@@ -29,7 +31,14 @@ function buildQueryString(params) {
     const qs = new URLSearchParams();
     Object.entries(params).forEach(([key, val]) => {
         if (val !== "" && val !== undefined && val !== null) {
-            qs.set(key, val);
+            // Special handling for tags array
+            if (key === "tags" && Array.isArray(val)) {
+                if (val.length > 0) {
+                    qs.set("tag", val.join(","));
+                }
+            } else {
+                qs.set(key, val);
+            }
         }
     });
     return qs.toString();
@@ -43,67 +52,77 @@ function buildQueryString(params) {
 // ---------------------------------------------------------------------------
 function BatchFilterBar({ filters, onChange }) {
     return (
-        <div className="flex flex-wrap gap-3 items-center">
-            {/* 1. Search */}
-            <Input
-                id="batch-search"
-                type="search"
-                placeholder="Cari judul batch..."
-                value={filters.q}
-                onChange={(e) => onChange("q", e.target.value)}
-                className="w-52"
-            />
+        <div className="space-y-6">
+            {/* Row 1: Search & Basic Filters */}
+            <div className="bg-muted/30 p-4 rounded-xl space-y-4">
+                <div className="flex flex-col md:flex-row gap-4">
+                    {/* Search */}
+                    <div className="relative flex-1">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                            id="batch-search"
+                            type="search"
+                            placeholder="Cari judul batch..."
+                            value={filters.q}
+                            onChange={(e) => onChange("q", e.target.value)}
+                            className="pl-9 bg-background"
+                        />
+                    </div>
 
-            {/* 2. Status */}
-            <Select
-                value={filters.status}
-                onValueChange={(val) => onChange("status", val === "all" ? "" : val)}
-            >
-                <SelectTrigger id="batch-status" className="w-40">
-                    <SelectValue placeholder="Semua Status" />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="all">Semua Status</SelectItem>
-                    <SelectItem value="OPEN">OPEN</SelectItem>
-                    <SelectItem value="ONGOING">ONGOING</SelectItem>
-                    <SelectItem value="CLOSED">CLOSED</SelectItem>
-                </SelectContent>
-            </Select>
+                    <div className="flex flex-wrap gap-3">
+                        {/* Status */}
+                        <Select
+                            value={filters.status}
+                            onValueChange={(val) => onChange("status", val === "all" ? "" : val)}
+                        >
+                            <SelectTrigger id="batch-status" className="w-[160px] bg-background">
+                                <SelectValue placeholder="Status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">Semua Status</SelectItem>
+                                <SelectItem value="OPEN">OPEN</SelectItem>
+                                <SelectItem value="ONGOING">ONGOING</SelectItem>
+                                <SelectItem value="CLOSED">CLOSED</SelectItem>
+                            </SelectContent>
+                        </Select>
 
-            {/* 3. Kuota */}
-            <Select
-                value={filters.is_full}
-                onValueChange={(val) => onChange("is_full", val === "all" ? "" : val)}
-            >
-                <SelectTrigger id="batch-quota" className="w-44">
-                    <SelectValue placeholder="Semua Kuota" />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="all">Semua Kuota</SelectItem>
-                    <SelectItem value="false">Belum penuh</SelectItem>
-                    <SelectItem value="true">Sudah penuh</SelectItem>
-                </SelectContent>
-            </Select>
+                        {/* Kuota */}
+                        <Select
+                            value={filters.is_full}
+                            onValueChange={(val) => onChange("is_full", val === "all" ? "" : val)}
+                        >
+                            <SelectTrigger id="batch-quota" className="w-[160px] bg-background">
+                                <SelectValue placeholder="Kuota" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">Semua Kuota</SelectItem>
+                                <SelectItem value="false">Belum penuh</SelectItem>
+                                <SelectItem value="true">Sudah penuh</SelectItem>
+                            </SelectContent>
+                        </Select>
 
-            {/* 4. Sort */}
-            <Select
-                value={`${filters.orderBy}:${filters.orderDir}`}
-                onValueChange={(val) => {
-                    const [orderBy, orderDir] = val.split(":");
-                    onChange("orderBy", orderBy);
-                    onChange("orderDir", orderDir);
-                }}
-            >
-                <SelectTrigger id="batch-sort" className="w-48">
-                    <SelectValue placeholder="Urutkan" />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="created_at:desc">Terbaru</SelectItem>
-                    <SelectItem value="title:asc">Judul A–Z</SelectItem>
-                    <SelectItem value="price:asc">Harga Terendah</SelectItem>
-                    <SelectItem value="remaining_quota:asc">Kuota Tersisa</SelectItem>
-                </SelectContent>
-            </Select>
+                        {/* Sort */}
+                        <Select
+                            value={`${filters.orderBy}:${filters.orderDir}`}
+                            onValueChange={(val) => {
+                                const [orderBy, orderDir] = val.split(":");
+                                onChange("orderBy", orderBy);
+                                onChange("orderDir", orderDir);
+                            }}
+                        >
+                            <SelectTrigger id="batch-sort" className="w-[180px] bg-background">
+                                <SelectValue placeholder="Urutkan" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="created_at:desc">Terbaru</SelectItem>
+                                <SelectItem value="title:asc">Judul A–Z</SelectItem>
+                                <SelectItem value="price:asc">Harga Terendah</SelectItem>
+                                <SelectItem value="remaining_quota:asc">Kuota Tersisa</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </div>
+            </div>
         </div>
     );
 }
@@ -124,6 +143,8 @@ const DEFAULT_FILTERS = {
     q: "",
     status: "",
     is_full: "",
+    tags: [],
+    tagMode: "or",
     orderBy: "created_at",
     orderDir: "desc",
     page: 1,
@@ -134,9 +155,26 @@ const BatchList = () => {
     const [filters, setFilters] = useState(DEFAULT_FILTERS);
     const [batches, setBatches] = useState([]);
     const [meta, setMeta] = useState(null);      // { page, limit, total, totalPages }
-    const [summary, setSummary] = useState(null); // { open, ongoing, full, active }
+    const [summary, setSummary] = useState(null); // { open, ongoing, full, active, summaryByTag }
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+
+    // Extract all unique tags with counts
+    const availableTags = useMemo(() => {
+        if (summary?.summaryByTag) {
+            return summary.summaryByTag; // Returns { tag1: count, tag2: count }
+        }
+        // Fallback: collect from batches data with dummy counts or just as array
+        const tagMap = {};
+        batches.forEach((batch) => {
+            if (batch.tags && Array.isArray(batch.tags)) {
+                batch.tags.forEach((tag) => {
+                    tagMap[tag] = (tagMap[tag] || 0) + 1;
+                });
+            }
+        });
+        return tagMap;
+    }, [batches, summary]);
 
     // -----------------------------------------------------------------------
     // Fetch whenever filters change
@@ -146,7 +184,6 @@ const BatchList = () => {
         setError(null);
         try {
             const qs = buildQueryString(filters);
-            // Example URL produced: /batch?q=react&status=OPEN&page=1&limit=9&orderBy=created_at&orderDir=desc
             const res = await api.get(`/batch?${qs}`);
             setBatches(res.data || []);
             setMeta(res.meta || null);
@@ -175,6 +212,21 @@ const BatchList = () => {
         }));
     }
 
+    const toggleTag = (tag) => {
+        const currentTags = [...filters.tags];
+        const index = currentTags.indexOf(tag);
+        if (index > -1) {
+            currentTags.splice(index, 1);
+        } else {
+            currentTags.push(tag);
+        }
+        handleFilterChange("tags", currentTags);
+    };
+
+    const clearAllFilters = () => {
+        setFilters(DEFAULT_FILTERS);
+    };
+
     // -----------------------------------------------------------------------
     // Render helpers
     // -----------------------------------------------------------------------
@@ -182,24 +234,74 @@ const BatchList = () => {
     const currentPage = filters.page;
 
     return (
-        <div className="container mx-auto p-6 space-y-6">
-            <h1 className="text-3xl font-bold">Pilih Batch</h1>
+        <div className="container mx-auto p-6 space-y-8">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <h1 className="text-3xl font-extrabold tracking-tight">Pilih Batch</h1>
+                {/* Summary badges */}
+                {summary && (
+                    <div className="flex flex-wrap gap-2">
+                        <Badge variant="default" className="rounded-md">Pendaftaran Buka: {summary.open}</Badge>
+                        <Badge variant="secondary" className="rounded-md">Sedang Berjalan: {summary.ongoing}</Badge>
+                        <Badge variant="outline" className="rounded-md">Sudah Penuh: {summary.full}</Badge>
+                    </div>
+                )}
+            </div>
 
-            {/* Summary badges */}
-            {summary && (
-                <div className="flex flex-wrap gap-2 text-sm">
-                    <Badge variant="default">Open: {summary.open}</Badge>
-                    <Badge variant="secondary">Ongoing: {summary.ongoing}</Badge>
-                    <Badge variant="outline">Full: {summary.full}</Badge>
+            <div className="space-y-6">
+                {/* Filter sections */}
+                <div className="space-y-4">
+                    <BatchFilterBar filters={filters} onChange={handleFilterChange} />
+                    
+                    <div className="space-y-3 px-1">
+                        <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                            <Filter className="h-3.5 w-3.5" />
+                            Filter per Topik
+                        </div>
+                        <TagFilter 
+                            tags={availableTags} 
+                            selectedTags={filters.tags} 
+                            onToggle={toggleTag} 
+                            limit={10}
+                        />
+                    </div>
                 </div>
-            )}
 
-            {/* Filter bar */}
-            <BatchFilterBar filters={filters} onChange={handleFilterChange} />
+                {/* Active Filters Row */}
+                {(filters.tags.length > 0 || filters.q !== "" || filters.status !== "" || filters.is_full !== "") && (
+                    <div className="flex flex-wrap items-center gap-2 py-3 border-t border-b">
+                        <span className="text-sm font-medium text-muted-foreground mr-1">Filter Aktif:</span>
+                        
+                        {filters.tags.map(tag => (
+                            <Badge key={tag} className="pl-3 pr-1 py-1 rounded-full bg-primary/10 text-primary border-primary/20 hover:bg-primary/15 transition-colors flex items-center gap-1">
+                                {tag}
+                                <button 
+                                    onClick={() => toggleTag(tag)}
+                                    className="p-0.5 hover:bg-primary/20 rounded-full transition-colors"
+                                >
+                                    <X className="h-3 w-3" />
+                                </button>
+                            </Badge>
+                        ))}
+
+                        {(filters.tags.length > 0 || filters.q !== "" || filters.status !== "" || filters.is_full !== "") && (
+                            <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                onClick={clearAllFilters}
+                                className="h-7 text-xs font-semibold hover:text-destructive hover:bg-destructive/5"
+                            >
+                                Hapus Semua
+                            </Button>
+                        )}
+                    </div>
+                )}
+            </div>
 
             {/* Error */}
             {error && (
-                <p className="text-destructive text-sm">{error}</p>
+                <div className="p-4 bg-destructive/5 border border-destructive/20 rounded-lg text-destructive text-sm font-medium">
+                    {error}
+                </div>
             )}
 
             {/* Loading skeleton */}
@@ -210,61 +312,80 @@ const BatchList = () => {
                     ))}
                 </div>
             ) : batches.length === 0 ? (
-                <p className="text-muted-foreground">
-                    Tidak ada batch yang sesuai filter.
-                </p>
+                <div className="text-center py-20 bg-muted/20 rounded-2xl border-2 border-dashed">
+                    <p className="text-muted-foreground font-medium">
+                        Tidak ada batch yang sesuai filter.
+                    </p>
+                    <Button variant="link" onClick={clearAllFilters} className="mt-2">
+                        Reset semua filter
+                    </Button>
+                </div>
             ) : (
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {batches.map((batch) => (
-                        <Card key={batch.id} className="flex flex-col">
-                            <CardHeader>
+                        <Card key={batch.id} className="flex flex-col group hover:border-primary/50 transition-all duration-300 shadow-sm hover:shadow-md">
+                            <CardHeader className="pb-3">
                                 <div className="flex justify-between items-start gap-2">
-                                    <CardTitle className="leading-snug">
+                                    <CardTitle className="leading-snug text-lg">
                                         {batch.title}
                                     </CardTitle>
                                     <div className="flex flex-col gap-1 items-end shrink-0">
-                                        <Badge variant={statusVariant(batch.status_effective)}>
+                                        <Badge variant={statusVariant(batch.status_effective)} className="px-2 py-0 text-[10px]">
                                             {batch.status_effective}
                                         </Badge>
                                         {batch.is_full && (
-                                            <Badge variant="destructive" className="text-xs">
+                                            <Badge variant="destructive" className="px-2 py-0 text-[10px]">
                                                 Penuh
                                             </Badge>
                                         )}
                                     </div>
                                 </div>
-                                <CardDescription>
+                                <CardDescription className="text-xs">
                                     Start:{" "}
                                     {format(new Date(batch.start_date), "d MMM yyyy")}
                                 </CardDescription>
                             </CardHeader>
 
-                            <CardContent className="flex-1 space-y-2 text-sm">
-                                <p className="font-semibold text-primary">
-                                    Rp{" "}
-                                    {parseInt(batch.price).toLocaleString("id-ID")}
-                                </p>
-                                <p>
-                                    {batch.end_date
-                                        ? `End: ${format(new Date(batch.end_date), "d MMM yyyy")}`
-                                        : "Durasi: 1 Bulan"}
-                                </p>
-                                <p className="text-muted-foreground">
-                                    Jadwal: Senin &amp; Kamis, 19.00 WIB
-                                </p>
-                                {batch.remaining_quota !== undefined && (
-                                    <p className="text-muted-foreground">
-                                        Sisa kuota:{" "}
-                                        <span className="font-medium text-foreground">
-                                            {batch.remaining_quota}
-                                        </span>
+                            <CardContent className="flex-1 space-y-4 text-sm pb-4">
+                                <div className="space-y-2">
+                                    <p className="text-xl font-bold text-primary">
+                                        Rp{" "}
+                                        {parseInt(batch.price).toLocaleString("id-ID")}
                                     </p>
+                                    <div className="space-y-1 text-muted-foreground text-xs font-medium">
+                                        <p>
+                                            {batch.end_date
+                                                ? `Selesai: ${format(new Date(batch.end_date), "d MMM yyyy")}`
+                                                : "Durasi: 1 Bulan"}
+                                        </p>
+                                        <p>Jadwal: Senin &amp; Kamis, 19.00 WIB</p>
+                                        {batch.remaining_quota !== undefined && (
+                                            <p className={batch.remaining_quota < 5 ? "text-orange-600 font-bold" : ""}>
+                                                Sisa kuota: {batch.remaining_quota}
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Display Batch Tags */}
+                                {batch.tags && batch.tags.length > 0 && (
+                                    <div className="flex flex-wrap gap-1.5 pt-1">
+                                        {batch.tags.map((tag) => (
+                                            <Badge 
+                                                key={tag} 
+                                                variant="outline" 
+                                                className="text-[10px] px-2 py-0 font-normal rounded-full border-muted-foreground/10 bg-muted/30"
+                                            >
+                                                {tag}
+                                            </Badge>
+                                        ))}
+                                    </div>
                                 )}
                             </CardContent>
 
-                            <CardFooter>
+                            <CardFooter className="pt-0">
                                 <Button
-                                    className="w-full"
+                                    className="w-full group-hover:bg-primary group-hover:text-primary-foreground transition-colors"
                                     variant="secondary"
                                     asChild
                                 >
@@ -280,23 +401,25 @@ const BatchList = () => {
 
             {/* Pagination */}
             {!loading && totalPages > 1 && (
-                <div className="flex items-center justify-center gap-4 pt-2">
+                <div className="flex items-center justify-center gap-4 pt-4 border-t">
                     <Button
                         variant="outline"
                         size="sm"
                         disabled={currentPage <= 1}
                         onClick={() => handleFilterChange("page", currentPage - 1)}
+                        className="rounded-full px-4"
                     >
                         ← Sebelumnya
                     </Button>
-                    <span className="text-sm text-muted-foreground">
-                        Halaman {currentPage} / {totalPages}
+                    <span className="text-sm font-medium">
+                        Halaman <span className="text-primary">{currentPage}</span> / {totalPages}
                     </span>
                     <Button
                         variant="outline"
                         size="sm"
                         disabled={currentPage >= totalPages}
                         onClick={() => handleFilterChange("page", currentPage + 1)}
+                        className="rounded-full px-4"
                     >
                         Selanjutnya →
                     </Button>
