@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { api } from "@/lib/api";
 import TagFilter from "@/components/TagFilter";
 import {
@@ -21,7 +21,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { format } from "date-fns";
+import { format, differenceInDays, startOfDay } from "date-fns";
 import { X, Search, Filter } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -46,9 +46,6 @@ function buildQueryString(params) {
 
 // ---------------------------------------------------------------------------
 // Sub-component: Filter bar
-// Props:
-//   filters  – current filter state object
-//   onChange – (key, value) => void  ← tell parent to update one filter field
 // ---------------------------------------------------------------------------
 function BatchFilterBar({ filters, onChange }) {
     return (
@@ -70,6 +67,21 @@ function BatchFilterBar({ filters, onChange }) {
                     </div>
 
                     <div className="flex flex-wrap gap-3">
+                        {/* Type */}
+                        <Select
+                            value={filters.type || "all"}
+                            onValueChange={(val) => onChange("type", val === "all" ? "" : val)}
+                        >
+                            <SelectTrigger id="batch-type" className="w-[160px] bg-background">
+                                <SelectValue placeholder="Tipe" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">Semua Tipe</SelectItem>
+                                <SelectItem value="LIVE">Bootcamp (LIVE)</SelectItem>
+                                <SelectItem value="COURSE">Course (COURSE)</SelectItem>
+                            </SelectContent>
+                        </Select>
+
                         {/* Status */}
                         <Select
                             value={filters.status}
@@ -143,6 +155,7 @@ const DEFAULT_FILTERS = {
     q: "",
     status: "",
     is_full: "",
+    type: "",
     tags: [],
     tagMode: "or",
     orderBy: "created_at",
@@ -152,12 +165,30 @@ const DEFAULT_FILTERS = {
 };
 
 const BatchList = () => {
-    const [filters, setFilters] = useState(DEFAULT_FILTERS);
+    const [searchParams] = useSearchParams();
+    
+    // Initial filters state, merging DEFAULT with any URL params
+    const [filters, setFilters] = useState(() => {
+        const typeFromUrl = searchParams.get("type") || "";
+        return {
+            ...DEFAULT_FILTERS,
+            type: typeFromUrl
+        };
+    });
+
     const [batches, setBatches] = useState([]);
     const [meta, setMeta] = useState(null);      // { page, limit, total, totalPages }
     const [summary, setSummary] = useState(null); // { open, ongoing, full, active, summaryByTag }
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+
+    // Sync state with URL params if they change (e.g. navigation)
+    useEffect(() => {
+        const typeFromUrl = searchParams.get("type") || "";
+        if (typeFromUrl !== filters.type) {
+            setFilters(prev => ({ ...prev, type: typeFromUrl }));
+        }
+    }, [searchParams]);
 
     // Extract all unique tags with counts
     const availableTags = useMemo(() => {
@@ -233,18 +264,12 @@ const BatchList = () => {
     const totalPages = meta?.totalPages ?? 1;
     const currentPage = filters.page;
 
+    const hasActiveFilters = filters.tags.length > 0 || filters.q !== "" || filters.status !== "" || filters.is_full !== "" || filters.type !== "";
+
     return (
         <div className="container mx-auto p-6 space-y-8">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <h1 className="text-3xl font-extrabold tracking-tight">Pilih Batch</h1>
-                {/* Summary badges */}
-                {summary && (
-                    <div className="flex flex-wrap gap-2">
-                        <Badge variant="default" className="rounded-md">Pendaftaran Buka: {summary.open}</Badge>
-                        <Badge variant="secondary" className="rounded-md">Sedang Berjalan: {summary.ongoing}</Badge>
-                        <Badge variant="outline" className="rounded-md">Sudah Penuh: {summary.full}</Badge>
-                    </div>
-                )}
             </div>
 
             <div className="space-y-6">
@@ -267,10 +292,23 @@ const BatchList = () => {
                 </div>
 
                 {/* Active Filters Row */}
-                {(filters.tags.length > 0 || filters.q !== "" || filters.status !== "" || filters.is_full !== "") && (
+                {hasActiveFilters && (
                     <div className="flex flex-wrap items-center gap-2 py-3 border-t border-b">
                         <span className="text-sm font-medium text-muted-foreground mr-1">Filter Aktif:</span>
                         
+                        {/* Type Chip */}
+                        {filters.type && (
+                            <Badge className="pl-3 pr-1 py-1 rounded-full bg-primary/10 text-primary border-primary/20 hover:bg-primary/15 transition-colors flex items-center gap-1">
+                                Tipe: {filters.type}
+                                <button 
+                                    onClick={() => handleFilterChange("type", "")}
+                                    className="p-0.5 hover:bg-primary/20 rounded-full transition-colors"
+                                >
+                                    <X className="h-3 w-3" />
+                                </button>
+                            </Badge>
+                        )}
+
                         {filters.tags.map(tag => (
                             <Badge key={tag} className="pl-3 pr-1 py-1 rounded-full bg-primary/10 text-primary border-primary/20 hover:bg-primary/15 transition-colors flex items-center gap-1">
                                 {tag}
@@ -283,16 +321,14 @@ const BatchList = () => {
                             </Badge>
                         ))}
 
-                        {(filters.tags.length > 0 || filters.q !== "" || filters.status !== "" || filters.is_full !== "") && (
-                            <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                onClick={clearAllFilters}
-                                className="h-7 text-xs font-semibold hover:text-destructive hover:bg-destructive/5"
-                            >
-                                Hapus Semua
-                            </Button>
-                        )}
+                        <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={clearAllFilters}
+                            className="h-7 text-xs font-semibold hover:text-destructive hover:bg-destructive/5"
+                        >
+                            Hapus Semua
+                        </Button>
                     </div>
                 )}
             </div>
@@ -304,6 +340,20 @@ const BatchList = () => {
                 </div>
             )}
 
+            {/* Result Count & Filter Feedback Row */}
+            {!loading && meta && (
+                <div className="flex items-center justify-between px-1 -mb-4">
+                    <p className="text-sm font-medium text-muted-foreground">
+                        Menampilkan <span className="text-foreground font-bold">{meta.total}</span> hasil
+                    </p>
+                    {hasActiveFilters && (
+                        <p className="text-xs text-primary/80 font-medium italic">
+                            Hasil disesuaikan dengan filter
+                        </p>
+                    )}
+                </div>
+            )}
+
             {/* Loading skeleton */}
             {loading ? (
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -312,90 +362,154 @@ const BatchList = () => {
                     ))}
                 </div>
             ) : batches.length === 0 ? (
-                <div className="text-center py-20 bg-muted/20 rounded-2xl border-2 border-dashed">
-                    <p className="text-muted-foreground font-medium">
-                        Tidak ada batch yang sesuai filter.
-                    </p>
-                    <Button variant="link" onClick={clearAllFilters} className="mt-2">
-                        Reset semua filter
+                <div className="text-center py-24 bg-muted/10 rounded-3xl border-2 border-dashed border-muted-foreground/20 space-y-4">
+                    <div className="bg-muted w-16 h-16 rounded-full flex items-center justify-center mx-auto text-2xl">
+                        🔍
+                    </div>
+                    <div className="space-y-2">
+                        <h3 className="text-xl font-bold">Ups! Tidak ada batch ditemukan</h3>
+                        <p className="text-muted-foreground max-w-xs mx-auto text-sm">
+                            Coba ubah kata kunci pencarian atau reset filter untuk melihat pilihan lainnya.
+                        </p>
+                    </div>
+                    <Button variant="outline" onClick={clearAllFilters} className="rounded-full px-8">
+                        Mulai Ulang Pencarian
                     </Button>
                 </div>
             ) : (
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {batches.map((batch) => (
-                        <Card key={batch.id} className="flex flex-col group hover:border-primary/50 transition-all duration-300 shadow-sm hover:shadow-md">
-                            <CardHeader className="pb-3">
-                                <div className="flex justify-between items-start gap-2">
-                                    <CardTitle className="leading-snug text-lg">
-                                        {batch.title}
-                                    </CardTitle>
-                                    <div className="flex flex-col gap-1 items-end shrink-0">
-                                        <Badge variant={statusVariant(batch.status_effective)} className="px-2 py-0 text-[10px]">
-                                            {batch.status_effective}
-                                        </Badge>
-                                        {batch.is_full && (
-                                            <Badge variant="destructive" className="px-2 py-0 text-[10px]">
-                                                Penuh
-                                            </Badge>
-                                        )}
-                                    </div>
-                                </div>
-                                <CardDescription className="text-xs">
-                                    Start:{" "}
-                                    {format(new Date(batch.start_date), "d MMM yyyy")}
-                                </CardDescription>
-                            </CardHeader>
+                    {batches.map((batch) => {
+                        const daysUntilStart = differenceInDays(
+                            startOfDay(new Date(batch.start_date)),
+                            startOfDay(new Date())
+                        );
 
-                            <CardContent className="flex-1 space-y-4 text-sm pb-4">
-                                <div className="space-y-2">
-                                    <p className="text-xl font-bold text-primary">
-                                        Rp{" "}
-                                        {parseInt(batch.price).toLocaleString("id-ID")}
-                                    </p>
-                                    <div className="space-y-1 text-muted-foreground text-xs font-medium">
-                                        <p>
-                                            {batch.end_date
-                                                ? `Selesai: ${format(new Date(batch.end_date), "d MMM yyyy")}`
-                                                : "Durasi: 1 Bulan"}
-                                        </p>
-                                        <p>Jadwal: Senin &amp; Kamis, 19.00 WIB</p>
-                                        {batch.remaining_quota !== undefined && (
-                                            <p className={batch.remaining_quota < 5 ? "text-orange-600 font-bold" : ""}>
-                                                Sisa kuota: {batch.remaining_quota}
+                        return (
+                            <Card key={batch.id} className="flex flex-col group hover:border-primary/50 transition-all duration-300 shadow-sm hover:shadow-md">
+                                <CardHeader className="pb-3">
+                                    <div className="flex justify-between items-start gap-2">
+                                        <CardTitle className="leading-snug text-lg">
+                                            {batch.title}
+                                        </CardTitle>
+                                        <div className="flex flex-col gap-1 items-end shrink-0">
+                                            {batch.type === "COURSE" ? (
+                                                <Badge
+                                                    variant="outline"
+                                                    className="text-[10px] px-2.5 py-0.5 font-bold uppercase tracking-wider border-primary/30 text-primary"
+                                                >
+                                                    Course
+                                                </Badge>
+                                            ) : (
+                                                <>
+                                                    <Badge variant={statusVariant(batch.status_effective)} className="px-2 py-0 text-[10px]">
+                                                        {batch.status_effective}
+                                                    </Badge>
+                                                    {batch.is_full && (
+                                                        <Badge variant="destructive" className="px-2 py-0 text-[10px]">
+                                                            Penuh
+                                                        </Badge>
+                                                    )}
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <CardDescription className="text-xs">
+                                        {batch.type === "COURSE" ? (
+                                            <span className="text-primary font-semibold">
+                                                Akses Fleksibel
+                                            </span>
+                                        ) : (
+                                            <>
+                                                Start:{" "}
+                                                {format(new Date(batch.start_date), "d MMM yyyy")}
+                                            </>
+                                        )}
+                                    </CardDescription>
+                                </CardHeader>
+
+                                <CardContent className="flex-1 space-y-4 text-sm pb-4">
+                                    <div className="space-y-2">
+                                        <div className="flex items-baseline justify-between gap-2">
+                                            <p className="text-xl font-bold text-primary">
+                                                Rp{" "}
+                                                {parseInt(batch.price).toLocaleString("id-ID")}
                                             </p>
-                                        )}
-                                    </div>
-                                </div>
+                                            
+                                            {/* Smart Urgency/Scarcity Highlights - ONLY for LIVE */}
+                                            {batch.type === "LIVE" && (
+                                                <div className="flex flex-wrap gap-2 justify-end">
+                                                    {batch.remaining_quota > 0 && batch.remaining_quota <= 5 && (
+                                                        <Badge variant="outline" className="text-[10px] border-orange-200 bg-orange-50 text-orange-700 font-bold px-2 py-0">
+                                                            🔥 Sisa {batch.remaining_quota} kursi
+                                                        </Badge>
+                                                    )}
+                                                    {daysUntilStart >= 0 && daysUntilStart <= 3 && (
+                                                        <Badge variant="outline" className="text-[10px] border-blue-200 bg-blue-50 text-blue-700 font-bold px-2 py-0">
+                                                            ⏰ {daysUntilStart === 0 ? "Mulai Hari Ini" : `Mulai dlm ${daysUntilStart} hari`}
+                                                        </Badge>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
 
-                                {/* Display Batch Tags */}
-                                {batch.tags && batch.tags.length > 0 && (
-                                    <div className="flex flex-wrap gap-1.5 pt-1">
-                                        {batch.tags.map((tag) => (
-                                            <Badge 
-                                                key={tag} 
-                                                variant="outline" 
-                                                className="text-[10px] px-2 py-0 font-normal rounded-full border-muted-foreground/10 bg-muted/30"
-                                            >
-                                                {tag}
-                                            </Badge>
-                                        ))}
+                                        <div className="space-y-1 text-muted-foreground text-xs font-medium border-t pt-3">
+                                            {batch.type === "LIVE" ? (
+                                                <>
+                                                    <p>
+                                                        {batch.end_date
+                                                            ? `Selesai: ${format(new Date(batch.end_date), "d MMM yyyy")}`
+                                                            : "Durasi: 1 Bulan"}
+                                                    </p>
+                                                    <p>Jadwal: Senin &amp; Kamis, 19.00 WIB</p>
+                                                    {batch.remaining_quota !== undefined && (
+                                                        <p className={batch.remaining_quota < 5 ? "text-orange-600 font-bold" : ""}>
+                                                            Sisa kuota: {batch.remaining_quota}
+                                                        </p>
+                                                    )}
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <p className="flex items-center gap-1.5">
+                                                        <span>✨</span> Belajar kapan saja, di mana saja
+                                                    </p>
+                                                    <p className="flex items-center gap-1.5">
+                                                        <span>🚀</span> Akses materi seumur hidup
+                                                    </p>
+                                                </>
+                                            )}
+                                        </div>
                                     </div>
-                                )}
-                            </CardContent>
 
-                            <CardFooter className="pt-0">
-                                <Button
-                                    className="w-full group-hover:bg-primary group-hover:text-primary-foreground transition-colors"
-                                    variant="secondary"
-                                    asChild
-                                >
-                                    <Link to={`/batches/${batch.id}`}>
-                                        Lihat Detail
-                                    </Link>
-                                </Button>
-                            </CardFooter>
-                        </Card>
-                    ))}
+                                    {/* Display Batch Tags */}
+                                    {batch.tags && batch.tags.length > 0 && (
+                                        <div className="flex flex-wrap gap-1.5 pt-1">
+                                            {batch.tags.map((tag) => (
+                                                <Badge 
+                                                    key={tag} 
+                                                    variant="outline" 
+                                                    className="text-[10px] px-2 py-0 font-normal rounded-full border-muted-foreground/10 bg-muted/30"
+                                                >
+                                                    {tag}
+                                                </Badge>
+                                            ))}
+                                        </div>
+                                    )}
+                                </CardContent>
+
+                                <CardFooter className="pt-0">
+                                    <Button
+                                        className="w-full group-hover:bg-primary group-hover:text-primary-foreground transition-colors"
+                                        variant="secondary"
+                                        asChild
+                                    >
+                                        <Link to={`/batches/${batch.id}`}>
+                                            Lihat Detail
+                                        </Link>
+                                    </Button>
+                                </CardFooter>
+                            </Card>
+                        );
+                    })}
                 </div>
             )}
 
