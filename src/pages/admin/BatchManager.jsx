@@ -41,6 +41,7 @@ import {
     ArrowUpDown,
     ArrowUp,
     ArrowDown,
+    Eye,
 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -63,7 +64,9 @@ const BatchManager = () => {
         page: 1,
         limit: 10,
         q: "",
-        status: "ALL",
+        liveStatus: "ALL",
+        courseStatus: "ALL",
+        type: "LIVE",
         is_full: false,
         orderBy: "created_at",
         orderDir: "desc",
@@ -87,6 +90,7 @@ const BatchManager = () => {
         price: "",
         quota: "",
         status: "ACTIVE",
+        mentors: "",
     });
 
     const fetchBatches = useCallback(async () => {
@@ -100,8 +104,19 @@ const BatchManager = () => {
             };
 
             if (queryParams.q) params.q = queryParams.q;
-            if (queryParams.status && queryParams.status !== "ALL")
-                params.status = queryParams.status;
+
+            // Use context-aware status
+            const currentStatus =
+                queryParams.type === "LIVE"
+                    ? queryParams.liveStatus
+                    : queryParams.courseStatus;
+
+            if (currentStatus && currentStatus !== "ALL")
+                params.status = currentStatus;
+
+            if (queryParams.type && queryParams.type !== "ALL")
+                params.type = queryParams.type;
+
             if (queryParams.is_full) params.is_full = true;
 
             const res = await api.get("/batch", { params });
@@ -160,11 +175,19 @@ const BatchManager = () => {
         }
     };
 
+    const handleTabChange = (type) => {
+        setQueryParams((prev) => ({
+            ...prev,
+            type,
+            page: 1,
+        }));
+    };
+
     // Dialog & Form Handlers
-    const handleOpenDialog = (batch = null) => {
+    const handleOpenDialog = async (batch = null) => {
         if (batch) {
             setEditingBatch(batch);
-            setFormData({
+            const initialData = {
                 title: batch.title,
                 description: batch.description || "",
                 type: batch.type || "LIVE",
@@ -176,22 +199,39 @@ const BatchManager = () => {
                 price: Number(batch.price),
                 quota: Number(batch.quota),
                 status: batch.status,
-            });
+                mentors: "",
+            };
+            setFormData(initialData);
+            setIsDialogOpen(true);
+
+            // Fetch detailed batch for mentors
+            try {
+                const res = await api.get(`/batch/${batch.id}`);
+                if (res.data && res.data.mentors) {
+                    const mentorsStr = res.data.mentors
+                        .map((m) => m.id)
+                        .join(", ");
+                    setFormData((prev) => ({ ...prev, mentors: mentorsStr }));
+                }
+            } catch (error) {
+                console.error("Failed to fetch batch mentors:", error);
+            }
         } else {
             setEditingBatch(null);
             setFormData({
                 title: "",
                 description: "",
-                type: "LIVE",
+                type: queryParams.type || "LIVE", // Default to current tab type
                 tags: "",
                 start_date: "",
                 end_date: "",
                 price: "",
                 quota: "",
                 status: "ACTIVE",
+                mentors: "",
             });
+            setIsDialogOpen(true);
         }
-        setIsDialogOpen(true);
     };
 
     const handleSave = async (e) => {
@@ -204,6 +244,12 @@ const BatchManager = () => {
                           .split(",")
                           .map((t) => t.trim())
                           .filter(Boolean)
+                    : [],
+                mentors: formData.mentors
+                    ? formData.mentors
+                          .split(",")
+                          .map((m) => parseInt(m.trim()))
+                          .filter((m) => !isNaN(m))
                     : [],
             };
 
@@ -251,6 +297,15 @@ const BatchManager = () => {
         );
     };
 
+    const isStartingSoon = (dateStr) => {
+        if (!dateStr) return false;
+        const start = new Date(dateStr);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const diff = (start - today) / (1000 * 60 * 60 * 24);
+        return diff >= 0 && diff <= 3;
+    };
+
     const renderPageNumbers = () => {
         const pages = [];
         const maxPagesToShow = 5;
@@ -290,48 +345,116 @@ const BatchManager = () => {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <h3 className="text-2xl font-bold tracking-tight">
-                    Batch Management
-                </h3>
+            <div>
+                <h3 className="text-2xl font-bold tracking-tight">Batches</h3>
+                <p className="text-muted-foreground">
+                    Manage your live bootcamps and courses
+                </p>
             </div>
 
             {/* Summary Cards Section (Backend Driven) */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="bg-card border rounded-lg p-4 shadow-sm">
-                    <div className="text-sm font-medium text-muted-foreground">
-                        Active Batches
-                    </div>
-                    <div className="text-2xl font-bold">{summary.active}</div>
-                </div>
-                <div className="bg-card border rounded-lg p-4 shadow-sm">
-                    <div className="text-sm font-medium text-muted-foreground">
-                        Open for Enrollment
-                    </div>
-                    <div className="text-2xl font-bold text-green-600">
-                        {summary.open}
-                    </div>
-                </div>
-                <div className="bg-card border rounded-lg p-4 shadow-sm">
-                    <div className="text-sm font-medium text-muted-foreground">
-                        Ongoing Classes
-                    </div>
-                    <div className="text-2xl font-bold text-blue-600">
-                        {summary.ongoing}
-                    </div>
-                </div>
-                <div className="bg-card border rounded-lg p-4 shadow-sm">
-                    <div className="text-sm font-medium text-muted-foreground">
-                        Full Capacity
-                    </div>
-                    <div className="text-2xl font-bold text-red-600">
-                        {summary.full}
-                    </div>
-                </div>
+                {queryParams.type === "LIVE" ? (
+                    <>
+                        <div className="bg-card border rounded-lg p-4 shadow-sm">
+                            <div className="text-sm font-medium text-muted-foreground">
+                                Active Batches
+                            </div>
+                            <div className="text-2xl font-bold">
+                                {summary.active}
+                            </div>
+                        </div>
+                        <div className="bg-card border rounded-lg p-4 shadow-sm">
+                            <div className="text-sm font-medium text-muted-foreground">
+                                Open for Enrollment
+                            </div>
+                            <div className="text-2xl font-bold text-green-600">
+                                {summary.open}
+                            </div>
+                        </div>
+                        <div className="bg-card border rounded-lg p-4 shadow-sm">
+                            <div className="text-sm font-medium text-muted-foreground">
+                                Ongoing Classes
+                            </div>
+                            <div className="text-2xl font-bold text-blue-600">
+                                {summary.ongoing}
+                            </div>
+                        </div>
+                        <div className="bg-card border rounded-lg p-4 shadow-sm">
+                            <div className="text-sm font-medium text-muted-foreground">
+                                Full Capacity
+                            </div>
+                            <div className="text-2xl font-bold text-red-600">
+                                {summary.full}
+                            </div>
+                        </div>
+                    </>
+                ) : (
+                    <>
+                        <div className="bg-card border rounded-lg p-4 shadow-sm">
+                            <div className="text-sm font-medium text-muted-foreground">
+                                Total Courses
+                            </div>
+                            <div className="text-2xl font-bold">
+                                {meta.total}
+                            </div>
+                        </div>
+                        <div className="bg-card border rounded-lg p-4 shadow-sm">
+                            <div className="text-sm font-medium text-muted-foreground">
+                                Active Courses
+                            </div>
+                            <div className="text-2xl font-bold text-green-600">
+                                {summary.active}
+                            </div>
+                        </div>
+                        <div className="bg-card border rounded-lg p-4 shadow-sm">
+                            <div className="text-sm font-medium text-muted-foreground">
+                                Inactive Courses
+                            </div>
+                            <div className="text-2xl font-bold text-muted-foreground">
+                                {Math.max(0, meta.total - summary.active)}
+                            </div>
+                        </div>
+                    </>
+                )}
             </div>
 
-            {/* Main Content Card: Filters + Table + Pagination */}
-            <div className="bg-card border rounded-lg shadow-sm">
+            {/* Main Content Card: Tabs + Filters + Table + Pagination */}
+            <div className="bg-card border rounded-lg shadow-sm overflow-hidden">
+                {/* Tabs Switcher (Segmented Control style) */}
+                <div className="flex bg-muted/50 p-1.5 gap-1.5">
+                    <button
+                        className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium transition-all rounded-md ${
+                            queryParams.type === "LIVE"
+                                ? "bg-primary/10 text-primary shadow-sm"
+                                : "text-muted-foreground hover:bg-muted"
+                        }`}
+                        onClick={() => handleTabChange("LIVE")}
+                    >
+                        Live Bootcamp
+                        {queryParams.type === "LIVE" && (
+                            <span className="bg-primary/20 px-1.5 rounded text-[10px]">
+                                {meta.total}
+                            </span>
+                        )}
+                    </button>
+                    <button
+                        className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium transition-all rounded-md ${
+                            queryParams.type === "COURSE"
+                                ? "bg-primary/10 text-primary shadow-sm"
+                                : "text-muted-foreground hover:bg-muted"
+                        }`}
+                        onClick={() => handleTabChange("COURSE")}
+                    >
+                        Course
+                        {queryParams.type === "COURSE" && (
+                            <span className="bg-primary/20 px-1.5 rounded text-[10px]">
+                                {meta.total}
+                            </span>
+                        )}
+                    </button>
+                </div>
+
                 {/* Visual Header: Filters & Actions */}
                 <div className="p-4 border-b flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
                     {/* Left: Filters */}
@@ -347,53 +470,83 @@ const BatchManager = () => {
                         </div>
 
                         <Select
-                            value={queryParams.status}
+                            value={
+                                queryParams.type === "LIVE"
+                                    ? queryParams.liveStatus
+                                    : queryParams.courseStatus
+                            }
                             onValueChange={(val) =>
                                 setQueryParams((prev) => ({
                                     ...prev,
-                                    status: val,
+                                    [prev.type === "LIVE"
+                                        ? "liveStatus"
+                                        : "courseStatus"]: val,
                                     page: 1,
                                 }))
                             }
                         >
-                            <SelectTrigger className="w-full sm:w-[180px]">
+                            <SelectTrigger className="w-full sm:w-[150px]">
                                 <SelectValue placeholder="Filter Status" />
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="ALL">All Status</SelectItem>
-                                <SelectItem value="OPEN">Open</SelectItem>
-                                <SelectItem value="ONGOING">Ongoing</SelectItem>
-                                <SelectItem value="FINISHED">
-                                    Finished
-                                </SelectItem>
-                                <SelectItem value="CLOSED">Closed</SelectItem>
+                                {queryParams.type === "LIVE" ? (
+                                    <>
+                                        <SelectItem value="OPEN">
+                                            Open
+                                        </SelectItem>
+                                        <SelectItem value="ONGOING">
+                                            Ongoing
+                                        </SelectItem>
+                                        <SelectItem value="FULL">
+                                            Full
+                                        </SelectItem>
+                                        <SelectItem value="CLOSED">
+                                            Closed
+                                        </SelectItem>
+                                    </>
+                                ) : (
+                                    <>
+                                        <SelectItem value="FINISHED">
+                                            Active
+                                        </SelectItem>
+                                        <SelectItem value="CLOSED">
+                                            Closed
+                                        </SelectItem>
+                                    </>
+                                )}
                             </SelectContent>
                         </Select>
 
-                        <div className="flex items-center space-x-2">
-                            <Checkbox
-                                id="is_full"
-                                checked={queryParams.is_full}
-                                onCheckedChange={(checked) =>
-                                    setQueryParams((prev) => ({
-                                        ...prev,
-                                        is_full: checked,
-                                        page: 1,
-                                    }))
-                                }
-                            />
-                            <Label
-                                htmlFor="is_full"
-                                className="cursor-pointer whitespace-nowrap"
-                            >
-                                Only Full Batches
-                            </Label>
-                        </div>
+                        {queryParams.type === "LIVE" && (
+                            <div className="flex items-center space-x-2">
+                                <Checkbox
+                                    id="is_full"
+                                    checked={queryParams.is_full}
+                                    onCheckedChange={(checked) =>
+                                        setQueryParams((prev) => ({
+                                            ...prev,
+                                            is_full: checked,
+                                            page: 1,
+                                        }))
+                                    }
+                                />
+                                <Label
+                                    htmlFor="is_full"
+                                    className="cursor-pointer whitespace-nowrap text-sm"
+                                >
+                                    Only Full
+                                </Label>
+                            </div>
+                        )}
                     </div>
 
                     {/* Right: Primary Action */}
                     <Button onClick={() => handleOpenDialog()}>
-                        <Plus className="h-4 w-4 mr-2" /> Add Batch
+                        <Plus className="h-4 w-4 mr-2" />
+                        {queryParams.type === "LIVE"
+                            ? "Create Live Bootcamp"
+                            : "Create Course"}
                     </Button>
                 </div>
 
@@ -401,52 +554,64 @@ const BatchManager = () => {
                 <div className="p-0">
                     <Table>
                         <TableHeader>
-                            <TableRow>
-                                <TableHead className="w-[50px]">#</TableHead>
-                                <TableHead>
+                            <TableRow className="hover:bg-transparent">
+                                <TableHead className="w-[50px] font-bold">
+                                    #
+                                </TableHead>
+                                <TableHead className="font-bold">
                                     <Button
                                         variant="ghost"
                                         onClick={() => handleSort("title")}
-                                        className="-ml-4 hover:bg-transparent"
+                                        className="-ml-4 hover:bg-transparent font-bold"
                                     >
                                         Title
                                         {renderSortIcon("title")}
                                     </Button>
                                 </TableHead>
-                                <TableHead>
-                                    <Button
-                                        variant="ghost"
-                                        onClick={() => handleSort("start_date")}
-                                        className="-ml-4 hover:bg-transparent"
-                                    >
-                                        Start Date
-                                        {renderSortIcon("start_date")}
-                                    </Button>
-                                </TableHead>
-                                <TableHead>
+                                {queryParams.type === "LIVE" && (
+                                    <>
+                                        <TableHead className="font-bold">
+                                            <Button
+                                                variant="ghost"
+                                                onClick={() =>
+                                                    handleSort("start_date")
+                                                }
+                                                className="-ml-4 hover:bg-transparent font-bold"
+                                            >
+                                                Start Date
+                                                {renderSortIcon("start_date")}
+                                            </Button>
+                                        </TableHead>
+                                    </>
+                                )}
+                                <TableHead className="font-bold">
                                     <Button
                                         variant="ghost"
                                         onClick={() => handleSort("price")}
-                                        className="-ml-4 hover:bg-transparent"
+                                        className="-ml-4 hover:bg-transparent font-bold"
                                     >
                                         Price
                                         {renderSortIcon("price")}
                                     </Button>
                                 </TableHead>
-                                <TableHead>
-                                    <Button
-                                        variant="ghost"
-                                        onClick={() =>
-                                            handleSort("remaining_quota")
-                                        }
-                                        className="-ml-4 hover:bg-transparent"
-                                    >
-                                        Quota
-                                        {renderSortIcon("remaining_quota")}
-                                    </Button>
+                                {queryParams.type === "LIVE" && (
+                                    <TableHead className="font-bold">
+                                        <Button
+                                            variant="ghost"
+                                            onClick={() =>
+                                                handleSort("remaining_quota")
+                                            }
+                                            className="-ml-4 hover:bg-transparent font-bold"
+                                        >
+                                            Quota
+                                            {renderSortIcon("remaining_quota")}
+                                        </Button>
+                                    </TableHead>
+                                )}
+                                <TableHead className="font-bold">
+                                    Status
                                 </TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead className="text-right">
+                                <TableHead className="text-right font-bold">
                                     Actions
                                 </TableHead>
                             </TableRow>
@@ -455,7 +620,9 @@ const BatchManager = () => {
                             {loading ? (
                                 <TableRow>
                                     <TableCell
-                                        colSpan={7}
+                                        colSpan={
+                                            queryParams.type === "LIVE" ? 7 : 5
+                                        }
                                         className="text-center py-8"
                                     >
                                         <Loader2 className="animate-spin h-8 w-8 mx-auto text-primary/50" />
@@ -463,94 +630,183 @@ const BatchManager = () => {
                                 </TableRow>
                             ) : batches.length > 0 ? (
                                 batches.map((batch, index) => (
-                                    <TableRow key={batch.id}>
+                                    <TableRow
+                                        key={batch.id}
+                                        className={`transition-colors py-4 ${
+                                            batch.type === "LIVE" &&
+                                            batch.is_full
+                                                ? "bg-destructive/5"
+                                                : batch.type === "LIVE" &&
+                                                    batch.remaining_quota <= 5
+                                                  ? "bg-primary/5"
+                                                  : ""
+                                        }`}
+                                    >
                                         <TableCell>
                                             {(meta.page - 1) * meta.limit +
                                                 index +
                                                 1}
                                         </TableCell>
-                                        <TableCell className="font-medium">
-                                            {batch.title}
+                                        <TableCell className="font-medium py-3">
+                                            <div className="flex flex-col gap-1">
+                                                <span className="text-base">
+                                                    {batch.title}
+                                                </span>
+                                                {batch.type === "LIVE" && (
+                                                    <div className="flex flex-wrap gap-1 mt-1">
+                                                        {batch.remaining_quota !==
+                                                            null &&
+                                                            batch.remaining_quota <=
+                                                                5 &&
+                                                            batch.remaining_quota >
+                                                                0 && (
+                                                                <Badge
+                                                                    variant="outline"
+                                                                    className="text-[10px] px-1.5 py-0 h-4 border-orange-200 bg-orange-50 text-orange-700"
+                                                                >
+                                                                    🔥 Almost
+                                                                    Full
+                                                                </Badge>
+                                                            )}
+                                                        {isStartingSoon(
+                                                            batch.start_date,
+                                                        ) && (
+                                                            <Badge
+                                                                variant="outline"
+                                                                className="text-[10px] px-1.5 py-0 h-4 border-blue-200 bg-blue-50 text-blue-700"
+                                                            >
+                                                                ⏰ Starting Soon
+                                                            </Badge>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
                                         </TableCell>
-                                        <TableCell>
-                                            {format(
-                                                new Date(batch.start_date),
-                                                "d MMM yyyy",
-                                            )}
-                                        </TableCell>
+                                        {queryParams.type === "LIVE" && (
+                                            <TableCell>
+                                                {batch.start_date
+                                                    ? format(
+                                                          new Date(
+                                                              batch.start_date,
+                                                          ),
+                                                          "d MMM yyyy",
+                                                      )
+                                                    : "-"}
+                                            </TableCell>
+                                        )}
                                         <TableCell>
                                             Rp{" "}
                                             {parseInt(
                                                 batch.price,
                                             ).toLocaleString("id-ID")}
                                         </TableCell>
+                                        {queryParams.type === "LIVE" && (
+                                            <TableCell>
+                                                <div className="flex items-center gap-2">
+                                                    <span
+                                                        className={
+                                                            batch.remaining_quota ===
+                                                            0
+                                                                ? "text-red-600 font-bold"
+                                                                : ""
+                                                        }
+                                                    >
+                                                        {batch.enrolled_count}
+                                                    </span>
+                                                    <span className="text-muted-foreground text-xs">
+                                                        / {batch.quota}
+                                                    </span>
+                                                </div>
+                                            </TableCell>
+                                        )}
                                         <TableCell>
-                                            <div className="flex items-center gap-2">
-                                                <span
-                                                    className={
-                                                        batch.remaining_quota ===
-                                                        0
-                                                            ? "text-red-500 font-bold"
-                                                            : ""
+                                            {batch.type === "LIVE" ? (
+                                                <Badge
+                                                    variant={
+                                                        batch.status_effective ===
+                                                        "OPEN"
+                                                            ? "default"
+                                                            : batch.status_effective ===
+                                                                "CLOSED"
+                                                              ? "destructive"
+                                                              : "secondary"
                                                     }
                                                 >
-                                                    {batch.enrolled_count}
-                                                </span>
-                                                <span className="text-muted-foreground text-xs">
-                                                    / {batch.quota}
-                                                </span>
+                                                    {batch.status_effective}
+                                                </Badge>
+                                            ) : (
+                                                <Badge
+                                                    variant={
+                                                        batch.status ===
+                                                        "ACTIVE"
+                                                            ? "default"
+                                                            : "destructive"
+                                                    }
+                                                >
+                                                    {batch.status === "ACTIVE"
+                                                        ? "Active"
+                                                        : "Closed"}
+                                                </Badge>
+                                            )}
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                            <div className="flex items-center justify-end gap-1">
+                                                <Button
+                                                    size="icon"
+                                                    variant="ghost"
+                                                    className="h-8 w-8"
+                                                    onClick={() =>
+                                                        console.log(
+                                                            "View Batch",
+                                                            batch.id,
+                                                        )
+                                                    }
+                                                    title="View Details"
+                                                >
+                                                    <Eye className="h-4 w-4" />
+                                                </Button>
+                                                <Button
+                                                    size="icon"
+                                                    variant="ghost"
+                                                    className="h-8 w-8"
+                                                    onClick={() =>
+                                                        toggleStatus(batch)
+                                                    }
+                                                    title={
+                                                        batch.status ===
+                                                        "ACTIVE"
+                                                            ? "Close Batch"
+                                                            : "Re-activate Batch"
+                                                    }
+                                                >
+                                                    {batch.status ===
+                                                    "ACTIVE" ? (
+                                                        <XCircle className="h-4 w-4 text-red-500" />
+                                                    ) : (
+                                                        <CheckCircle className="h-4 w-4 text-green-500" />
+                                                    )}
+                                                </Button>
+                                                <Button
+                                                    size="icon"
+                                                    variant="ghost"
+                                                    className="h-8 w-8"
+                                                    onClick={() =>
+                                                        handleOpenDialog(batch)
+                                                    }
+                                                    title="Edit Batch"
+                                                >
+                                                    <Edit className="h-4 w-4" />
+                                                </Button>
                                             </div>
-                                        </TableCell>
-                                        <TableCell>
-                                            <Badge
-                                                variant={
-                                                    batch.status_effective ===
-                                                    "OPEN"
-                                                        ? "default"
-                                                        : batch.status_effective ===
-                                                            "CLOSED"
-                                                          ? "destructive"
-                                                          : "secondary"
-                                                }
-                                            >
-                                                {batch.status_effective}
-                                            </Badge>
-                                        </TableCell>
-                                        <TableCell className="text-right space-x-2">
-                                            <Button
-                                                size="icon"
-                                                variant="ghost"
-                                                onClick={() =>
-                                                    toggleStatus(batch)
-                                                }
-                                                title={
-                                                    batch.status === "ACTIVE"
-                                                        ? "Close Batch"
-                                                        : "Re-activate Batch"
-                                                }
-                                            >
-                                                {batch.status === "ACTIVE" ? (
-                                                    <XCircle className="h-4 w-4 text-red-500" />
-                                                ) : (
-                                                    <CheckCircle className="h-4 w-4 text-green-500" />
-                                                )}
-                                            </Button>
-                                            <Button
-                                                size="icon"
-                                                variant="outline"
-                                                onClick={() =>
-                                                    handleOpenDialog(batch)
-                                                }
-                                            >
-                                                <Edit className="h-4 w-4" />
-                                            </Button>
                                         </TableCell>
                                     </TableRow>
                                 ))
                             ) : (
                                 <TableRow>
                                     <TableCell
-                                        colSpan={7}
+                                        colSpan={
+                                            queryParams.type === "LIVE" ? 7 : 5
+                                        }
                                         className="text-center py-12 text-muted-foreground"
                                     >
                                         No batches found matching your criteria.
@@ -560,6 +816,8 @@ const BatchManager = () => {
                         </TableBody>
                     </Table>
                 </div>
+
+
 
                 {/* Pagination Controls */}
                 <div className="p-4 border-t flex items-center justify-between">
@@ -594,7 +852,7 @@ const BatchManager = () => {
 
             {/* Create/Edit Dialog */}
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                <DialogContent>
+                <DialogContent className="max-w-md">
                     <DialogHeader>
                         <DialogTitle>
                             {editingBatch ? "Edit Batch" : "Create New Batch"}
@@ -631,35 +889,70 @@ const BatchManager = () => {
                             />
                         </div>
 
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label>Batch Type</Label>
+                                <Select
+                                    value={formData.type}
+                                    onValueChange={(val) =>
+                                        setFormData({
+                                            ...formData,
+                                            type: val,
+                                            // Reset fields if switching to COURSE
+                                            ...(val === "COURSE" && {
+                                                start_date: "",
+                                                end_date: "",
+                                                quota: "",
+                                            }),
+                                        })
+                                    }
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select type" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="LIVE">
+                                            LIVE
+                                        </SelectItem>
+                                        <SelectItem value="COURSE">
+                                            COURSE
+                                        </SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Status</Label>
+                                <select
+                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                    value={formData.status}
+                                    onChange={(e) =>
+                                        setFormData({
+                                            ...formData,
+                                            status: e.target.value,
+                                        })
+                                    }
+                                >
+                                    <option value="ACTIVE">ACTIVE</option>
+                                    <option value="CLOSED">CLOSED</option>
+                                </select>
+                            </div>
+                        </div>
+
                         <div className="space-y-2">
-                            <Label>Batch Type</Label>
-                            <Select
-                                value={formData.type}
-                                onValueChange={(val) =>
+                            <Label>Mentors (IDs)</Label>
+                            <Input
+                                value={formData.mentors}
+                                onChange={(e) =>
                                     setFormData({
                                         ...formData,
-                                        type: val,
-                                        // Reset fields if switching to COURSE
-                                        ...(val === "COURSE" && {
-                                            start_date: "",
-                                            end_date: "",
-                                            quota: "",
-                                        }),
+                                        mentors: e.target.value,
                                     })
                                 }
-                            >
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select type" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="LIVE">
-                                        LIVE - Fixed schedule & quota
-                                    </SelectItem>
-                                    <SelectItem value="COURSE">
-                                        COURSE - Flexible, no time limit
-                                    </SelectItem>
-                                </SelectContent>
-                            </Select>
+                                placeholder="e.g. 1, 2, 3"
+                            />
+                            <p className="text-[0.7rem] text-muted-foreground">
+                                Comma-separated mentor user IDs.
+                            </p>
                         </div>
 
                         <div className="space-y-2">
@@ -672,11 +965,8 @@ const BatchManager = () => {
                                         tags: e.target.value,
                                     })
                                 }
-                                placeholder="e.g. react, frontend, beginner (comma separated)"
+                                placeholder="e.g. react, frontend, beginner"
                             />
-                            <p className="text-[0.8rem] text-muted-foreground">
-                                Separate tags with commas.
-                            </p>
                         </div>
 
                         {formData.type === "LIVE" && (
@@ -745,24 +1035,7 @@ const BatchManager = () => {
                                 </div>
                             )}
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <Label>Status</Label>
-                                <select
-                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                                    value={formData.status}
-                                    onChange={(e) =>
-                                        setFormData({
-                                            ...formData,
-                                            status: e.target.value,
-                                        })
-                                    }
-                                >
-                                    <option value="ACTIVE">ACTIVE</option>
-                                    <option value="CLOSED">CLOSED</option>
-                                </select>
-                            </div>
-                        </div>
+
                         <DialogFooter>
                             <Button
                                 type="button"
