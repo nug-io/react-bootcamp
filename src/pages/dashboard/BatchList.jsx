@@ -416,7 +416,7 @@ const BatchList = () => {
                                     <CardDescription className="text-xs">
                                         {batch.type === "COURSE" ? (
                                             <span className="text-primary font-semibold">
-                                                Akses Fleksibel
+                                                Video Learning
                                             </span>
                                         ) : (
                                             <>
@@ -460,7 +460,6 @@ const BatchList = () => {
                                                             ? `Selesai: ${format(new Date(batch.end_date), "d MMM yyyy")}`
                                                             : "Durasi: 1 Bulan"}
                                                     </p>
-                                                    <p>Jadwal: Senin &amp; Kamis, 19.00 WIB</p>
                                                     {batch.remaining_quota !== undefined && (
                                                         <p className={batch.remaining_quota < 5 ? "text-orange-600 font-bold" : ""}>
                                                             Sisa kuota: {batch.remaining_quota}
@@ -498,8 +497,7 @@ const BatchList = () => {
 
                                 <CardFooter className="pt-0">
                                     <Button
-                                        className="w-full group-hover:bg-primary group-hover:text-primary-foreground transition-colors"
-                                        variant="secondary"
+                                        className="w-full font-semibold"
                                         asChild
                                     >
                                         <Link to={`/batches/${batch.id}`}>

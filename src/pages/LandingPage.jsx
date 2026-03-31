@@ -70,7 +70,7 @@ const LandingPage = () => {
                 <CardDescription className="flex items-center gap-2">
                     {batch.type === "COURSE" ? (
                         <span className="text-primary font-semibold bg-primary/5 px-2 py-0.5 rounded text-xs">
-                            Akses Fleksibel
+                            Video Learning
                         </span>
                     ) : (
                         <span className="text-muted-foreground font-medium text-xs bg-muted px-2 py-0.5 rounded">
@@ -94,7 +94,7 @@ const LandingPage = () => {
                             </p>
                         ) : (
                             <p className="flex items-center gap-2">
-                                <span>📅</span> Senin & Kamis, 19.00 WIB
+                                <span>📅</span> Mentoring Langsung
                             </p>
                         )}
                         <p className="flex items-center gap-2">
