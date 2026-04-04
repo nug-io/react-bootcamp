@@ -16,6 +16,7 @@ import MaterialView from "@/pages/dashboard/MaterialView";
 import MyPayment from "@/pages/dashboard/MyPayment";
 import InvoicePage from "@/pages/dashboard/InvoicePage";
 import AdminDashboard from "@/pages/admin/AdminDashboard";
+import AdminUserManager from "@/pages/admin/AdminUserManager";
 import ThankYouPage from "@/pages/dashboard/ThankYouPage";
 
 // Protect routes
