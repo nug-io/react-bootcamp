@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { Link, useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,15 +10,33 @@ import BatchManager from "./BatchManager";
 import MaterialManager from "./MaterialManager";
 import ParticipantList from "./ParticipantList";
 import AdminUserManager from "./AdminUserManager";
+import MentorManager from "./MentorManager";
 
 const AdminDashboard = () => {
     const { logout, user } = useAuthStore();
     const navigate = useNavigate();
-    const [activeTab, setActiveTab] = useState("batches");
+    const location = useLocation();
+    const [searchParams, setSearchParams] = useSearchParams();
+    
+    // Determine active tab from path or search param
+    const getActiveTab = () => {
+        const path = location.pathname;
+        if (path === "/admin/users") return "users";
+        if (path === "/admin/mentor") return "mentors";
+        return searchParams.get("tab") || "batches";
+    };
+
+    const activeTab = getActiveTab();
 
     const handleLogout = () => {
         logout();
         navigate("/");
+    };
+
+    const setActiveTab = (tabId) => {
+        if (tabId === "users") navigate("/admin/users");
+        else if (tabId === "mentors") navigate("/admin/mentor");
+        else navigate(`/admin?tab=${tabId}`);
     };
 
     const menuItems = [
@@ -28,6 +46,7 @@ const AdminDashboard = () => {
         { id: "materials", label: "Material Management", icon: BookOpen },
         { id: "participants", label: "Participants", icon: Users },
         { id: "users", label: "Users", icon: Users },
+        { id: "mentors", label: "Mentors", icon: Users },
     ];
 
     return (
@@ -89,6 +108,7 @@ const AdminDashboard = () => {
                                 <ParticipantList />
                             )}
                             {activeTab === 'users' && <AdminUserManager />}
+                            {activeTab === 'mentors' && <MentorManager />}
                         </CardContent>
                     </Card>
                 </div>

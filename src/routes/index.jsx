@@ -58,28 +58,40 @@ export const AppRoutes = () => {
             </Route>
 
             {/* User Routes (Protected) */}
-            <Route element={<ProtectedRoute allowedRoles={['USER', 'ADMIN']} />}>
+            <Route
+                element={<ProtectedRoute allowedRoles={["USER", "ADMIN"]} />}
+            >
                 {/* Batches Flow (can use MainLayout or DashboardLayout?) - User requested separate flow */}
                 <Route element={<MainLayout />}>
                     <Route path="/batches" element={<BatchList />} />
                     <Route path="/batches/:batchId" element={<BatchDetail />} />
                 </Route>
 
-                <Route element={<MainLayout />}> {/* Or minimal layout */}
+                <Route element={<MainLayout />}>
+                    {" "}
+                    {/* Or minimal layout */}
                     <Route path="/enroll/success" element={<ThankYouPage />} />
                 </Route>
 
                 <Route element={<DashboardLayout />}>
                     <Route path="/dashboard" element={<UserDashboard />} />
                     <Route path="/dashboard/payments" element={<MyPayment />} />
-                    <Route path="/dashboard/invoice/:id" element={<InvoicePage />} />
-                    <Route path="/dashboard/materials/:materialId" element={<MaterialView />} />
+                    <Route
+                        path="/dashboard/invoice/:id"
+                        element={<InvoicePage />}
+                    />
+                    <Route
+                        path="/dashboard/materials/:materialId"
+                        element={<MaterialView />}
+                    />
                 </Route>
             </Route>
 
             {/* Admin Routes (Protected) */}
-            <Route element={<ProtectedRoute allowedRoles={['ADMIN']} />}>
+            <Route element={<ProtectedRoute allowedRoles={["ADMIN"]} />}>
                 <Route path="/admin" element={<AdminDashboard />} />
+                <Route path="/admin/users" element={<AdminDashboard />} />
+                <Route path="/admin/mentor" element={<AdminDashboard />} />
             </Route>
 
             {/* Fallback */}

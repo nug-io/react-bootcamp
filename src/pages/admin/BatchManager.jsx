@@ -51,6 +51,11 @@ const BatchManager = () => {
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [editingBatch, setEditingBatch] = useState(null);
 
+    // Mentor Selection State
+    const [mentorsList, setMentorsList] = useState([]);
+    const [loadingMentors, setLoadingMentors] = useState(false);
+    const [selectedMentors, setSelectedMentors] = useState([]);
+
     // Summary State (Backend-driven)
     const [summary, setSummary] = useState({
         active: 0,
@@ -90,8 +95,19 @@ const BatchManager = () => {
         price: "",
         quota: "",
         status: "ACTIVE",
-        mentors: "",
     });
+
+    const fetchMentors = useCallback(async () => {
+        setLoadingMentors(true);
+        try {
+            const res = await api.get("/mentor", { params: { mode: "list" } });
+            setMentorsList(res.data || []);
+        } catch (error) {
+            console.error("Failed to fetch mentors", error);
+        } finally {
+            setLoadingMentors(false);
+        }
+    }, []);
 
     const fetchBatches = useCallback(async () => {
         setLoading(true);
@@ -185,6 +201,8 @@ const BatchManager = () => {
 
     // Dialog & Form Handlers
     const handleOpenDialog = async (batch = null) => {
+        if (mentorsList.length === 0) fetchMentors();
+
         if (batch) {
             setEditingBatch(batch);
             const initialData = {
@@ -199,19 +217,16 @@ const BatchManager = () => {
                 price: Number(batch.price),
                 quota: Number(batch.quota),
                 status: batch.status,
-                mentors: "",
             };
             setFormData(initialData);
+            setSelectedMentors([]);
             setIsDialogOpen(true);
 
             // Fetch detailed batch for mentors
             try {
                 const res = await api.get(`/batch/${batch.id}`);
                 if (res.data && res.data.mentors) {
-                    const mentorsStr = res.data.mentors
-                        .map((m) => m.id)
-                        .join(", ");
-                    setFormData((prev) => ({ ...prev, mentors: mentorsStr }));
+                    setSelectedMentors(res.data.mentors.map((m) => m.id));
                 }
             } catch (error) {
                 console.error("Failed to fetch batch mentors:", error);
@@ -228,8 +243,8 @@ const BatchManager = () => {
                 price: "",
                 quota: "",
                 status: "ACTIVE",
-                mentors: "",
             });
+            setSelectedMentors([]);
             setIsDialogOpen(true);
         }
     };
@@ -245,12 +260,7 @@ const BatchManager = () => {
                           .map((t) => t.trim())
                           .filter(Boolean)
                     : [],
-                mentors: formData.mentors
-                    ? formData.mentors
-                          .split(",")
-                          .map((m) => parseInt(m.trim()))
-                          .filter((m) => !isNaN(m))
-                    : [],
+                mentors: selectedMentors,
             };
 
             // Remove invalid fields for COURSE
@@ -273,6 +283,14 @@ const BatchManager = () => {
             console.error(error);
             toast.error(extractErrorMessage(error));
         }
+    };
+
+    const toggleMentorSelection = (mentorId) => {
+        setSelectedMentors((prev) =>
+            prev.includes(mentorId)
+                ? prev.filter((id) => id !== mentorId)
+                : [...prev, mentorId],
+        );
     };
 
     const toggleStatus = async (batch) => {
@@ -507,7 +525,7 @@ const BatchManager = () => {
                                     </>
                                 ) : (
                                     <>
-                                        <SelectItem value="FINISHED">
+                                        <SelectItem value="ACTIVE">
                                             Active
                                         </SelectItem>
                                         <SelectItem value="CLOSED">
@@ -652,6 +670,12 @@ const BatchManager = () => {
                                                 <span className="text-base">
                                                     {batch.title}
                                                 </span>
+                                                {batch.type === "COURSE" && (
+                                                    <span className="text-xs text-muted-foreground font-normal">
+                                                        Self-paced learning, no
+                                                        schedule
+                                                    </span>
+                                                )}
                                                 {batch.type === "LIVE" && (
                                                     <div className="flex flex-wrap gap-1 mt-1">
                                                         {batch.remaining_quota !==
@@ -817,8 +841,6 @@ const BatchManager = () => {
                     </Table>
                 </div>
 
-
-
                 {/* Pagination Controls */}
                 <div className="p-4 border-t flex items-center justify-between">
                     <div className="text-sm text-muted-foreground">
@@ -939,20 +961,47 @@ const BatchManager = () => {
                         </div>
 
                         <div className="space-y-2">
-                            <Label>Mentors (IDs)</Label>
-                            <Input
-                                value={formData.mentors}
-                                onChange={(e) =>
-                                    setFormData({
-                                        ...formData,
-                                        mentors: e.target.value,
-                                    })
-                                }
-                                placeholder="e.g. 1, 2, 3"
-                            />
-                            <p className="text-[0.7rem] text-muted-foreground">
-                                Comma-separated mentor user IDs.
-                            </p>
+                            <Label>Mentors</Label>
+                            <div className="border rounded-md p-3 max-h-40 overflow-y-auto space-y-2 bg-muted/5">
+                                {loadingMentors ? (
+                                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                        Loading mentors...
+                                    </div>
+                                ) : mentorsList.length === 0 ? (
+                                    <div className="text-xs text-muted-foreground italic">
+                                        No mentors available
+                                    </div>
+                                ) : (
+                                    mentorsList.map((mentor) => (
+                                        <div
+                                            key={mentor.id}
+                                            className="flex items-center space-x-2"
+                                        >
+                                            <Checkbox
+                                                id={`mentor-${mentor.id}`}
+                                                checked={selectedMentors.includes(
+                                                    mentor.id,
+                                                )}
+                                                onCheckedChange={() =>
+                                                    toggleMentorSelection(
+                                                        mentor.id,
+                                                    )
+                                                }
+                                            />
+                                            <Label
+                                                htmlFor={`mentor-${mentor.id}`}
+                                                className="text-sm font-normal cursor-pointer flex-1"
+                                            >
+                                                {mentor.name}{" "}
+                                                <span className="text-[10px] text-muted-foreground">
+                                                    ({mentor.user?.email})
+                                                </span>
+                                            </Label>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
                         </div>
 
                         <div className="space-y-2">
