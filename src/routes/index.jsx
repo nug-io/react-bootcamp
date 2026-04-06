@@ -27,8 +27,11 @@ const ProtectedRoute = ({ allowedRoles }) => {
         return <Navigate to="/auth" replace />;
     }
 
-    if (allowedRoles && !allowedRoles.includes(user.role)) {
-        return <Navigate to="/dashboard" replace />; // or 403 page
+    const userRole = user.role?.toUpperCase();
+    const roles = allowedRoles.map(r => r.toUpperCase());
+
+    if (allowedRoles && !roles.includes(userRole)) {
+        return <Navigate to="/" replace />; 
     }
 
     return <Outlet />;
@@ -36,9 +39,12 @@ const ProtectedRoute = ({ allowedRoles }) => {
 
 // Redirect if already logged in
 const PublicRoute = () => {
-    const { token } = useAuthStore();
-    // If logged in, go to batches or dashboard
-    if (token) return <Navigate to="/batches" replace />;
+    const { token, user } = useAuthStore();
+    // If logged in, go to dashboard or admin
+    if (token && user) {
+        const userRole = user.role?.toUpperCase();
+        return <Navigate to={userRole === 'ADMIN' ? "/admin" : "/dashboard"} replace />;
+    }
     return <Outlet />;
 };
 
@@ -57,19 +63,13 @@ export const AppRoutes = () => {
                 </Route>
             </Route>
 
-            {/* User Routes (Protected) */}
+            {/* User & Mentor Routes (Protected) */}
             <Route
-                element={<ProtectedRoute allowedRoles={["USER", "ADMIN"]} />}
+                element={<ProtectedRoute allowedRoles={["USER", "ADMIN", "MENTOR"]} />}
             >
-                {/* Batches Flow (can use MainLayout or DashboardLayout?) - User requested separate flow */}
                 <Route element={<MainLayout />}>
                     <Route path="/batches" element={<BatchList />} />
                     <Route path="/batches/:batchId" element={<BatchDetail />} />
-                </Route>
-
-                <Route element={<MainLayout />}>
-                    {" "}
-                    {/* Or minimal layout */}
                     <Route path="/enroll/success" element={<ThankYouPage />} />
                 </Route>
 
@@ -87,8 +87,8 @@ export const AppRoutes = () => {
                 </Route>
             </Route>
 
-            {/* Admin Routes (Protected) */}
-            <Route element={<ProtectedRoute allowedRoles={["ADMIN"]} />}>
+            {/* Admin & Mentor Management Routes (Protected) */}
+            <Route element={<ProtectedRoute allowedRoles={['ADMIN', 'MENTOR']} />}>
                 <Route path="/admin" element={<AdminDashboard />} />
                 <Route path="/admin/users" element={<AdminDashboard />} />
                 <Route path="/admin/mentor" element={<AdminDashboard />} />

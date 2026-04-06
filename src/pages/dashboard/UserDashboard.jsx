@@ -21,9 +21,15 @@ const UserDashboard = () => {
         const fetchEnrollments = async () => {
             try {
                 const res = await api.get("/enrollment/my-enrollment");
-                setEnrollments(res.data || []);
-                if (res.data && res.data.length > 0) {
-                    setSelectedBatchId(res.data[0].batch_id); // Default select first
+                const data = res?.data || [];
+                setEnrollments(data);
+                
+                if (data.length > 0) {
+                    // Correct field: Enrollment object has batch.id
+                    const firstBatchId = data[0].batch?.id;
+                    if (firstBatchId) {
+                        setSelectedBatchId(firstBatchId);
+                    }
                 }
             } catch (error) {
                 console.error("Failed to fetch enrollments", error);
@@ -42,9 +48,10 @@ const UserDashboard = () => {
             setLoadingMaterials(true);
             try {
                 const res = await api.get(`/material/batch/${selectedBatchId}`);
-                setMaterials(res.data || []);
+                setMaterials(res?.data || []);
             } catch (error) {
                 console.error("Failed to fetch materials", error);
+                setMaterials([]);
             } finally {
                 setLoadingMaterials(false);
             }
@@ -58,7 +65,7 @@ const UserDashboard = () => {
         <div className="container mx-auto p-6 space-y-8">
             <div className="flex justify-between items-center">
                 <div>
-                    <h1 className="text-2xl font-bold">Halo, {user?.name} 👋</h1>
+                    <h1 className="text-2xl font-bold">Halo, {user?.name || 'Pelajar'} 👋</h1>
                     <p className="text-muted-foreground">Selamat belajar! Jangan lupa cek jadwal Zoom.</p>
                 </div>
             </div>
@@ -78,21 +85,20 @@ const UserDashboard = () => {
                     <div className="lg:col-span-1 space-y-4">
                         <h2 className="font-semibold text-lg">Batch Saya</h2>
                         {enrollments.map((enrollment) => {
-                            // Assuming enrollment object has nested batch details or we map it manually 
-                            // API Spec: enrollment { batch: { ... } }
-                            const batch = enrollment.batch || { title: `Batch #${enrollment.batch_id}` };
-                            const isSelected = selectedBatchId === enrollment.batch_id;
+                            const batch = enrollment.batch || { title: `Batch #${enrollment.enrollment_id}` };
+                            const batchId = batch.id;
+                            const isSelected = selectedBatchId === batchId;
 
                             return (
                                 <Card
-                                    key={enrollment.id}
+                                    key={enrollment.enrollment_id || Math.random()}
                                     className={`cursor-pointer transition-colors ${isSelected ? 'border-primary bg-primary/5' : 'hover:bg-gray-50'}`}
-                                    onClick={() => setSelectedBatchId(enrollment.batch_id)}
+                                    onClick={() => batchId && setSelectedBatchId(batchId)}
                                 >
                                     <CardHeader className="p-4">
                                         <CardTitle className="text-base">{batch.title}</CardTitle>
                                         <CardDescription className="text-xs">
-                                            Senin & Kamis, 19.00 WIB
+                                            {batch.type === 'COURSE' ? 'Akses Fleksibel' : 'Jadwal Terstruktur'}
                                         </CardDescription>
                                     </CardHeader>
                                 </Card>

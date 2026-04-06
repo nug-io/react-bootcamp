@@ -28,7 +28,7 @@ const MainLayout = () => {
                                 </Link>
                                 <Link
                                     to={
-                                        user.role === "ADMIN"
+                                        user.role?.toUpperCase() === "ADMIN"
                                             ? "/admin"
                                             : "/dashboard"
                                     }
